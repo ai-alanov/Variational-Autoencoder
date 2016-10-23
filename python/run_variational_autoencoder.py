@@ -1,3 +1,8 @@
+'''
+Training a variational autoencoder with 2 layer fully-connected
+encoder/decoders and gaussian noise distribution.
+'''
+
 import numpy as np
 import tensorflow as tf
 from tensorflow.examples.tutorials.mnist import input_data
