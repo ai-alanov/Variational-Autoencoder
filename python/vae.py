@@ -27,7 +27,7 @@ class VAE(object):
         self.sess.run(self.init)
         
     def __str__(self):
-        return 'VAE'
+        return 'ReparamTrickVAE'
         
     def _create_network(self):
         self.weights = self._initialize_weights(**self.network_architecture)
