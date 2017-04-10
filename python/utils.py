@@ -22,7 +22,7 @@ def xavier_init(fan_in, fan_out, constant=1):
                              minval=low, maxval=high, 
                              dtype=tf.float32)
 
-def init_layer(n_in, n_out, name):
+def init_weights(n_in, n_out, name):
     w = tf.Variable(xavier_init(n_in, n_out), name=name)
     b = tf.Variable(tf.zeros([n_out]), name=name + '_b')
     return w, b
@@ -33,7 +33,7 @@ def build_layer(x, w, b, nonlinearity=None):
         y = nonlinearity(y)
     return y
 
-def log_normal_density(x, mu, sigma):
+def log_normal_density(x, mu, sigma=1):
     return -0.5 * tf.reduce_sum(((x - mu) / sigma) ** 2 + tf.log(2 * np.pi) + 2 * tf.log(sigma), 1)
 
 def bernoulli_logit_density(x, f):
