@@ -3,6 +3,11 @@ import tensorflow as tf
 import collections
 from itertools import chain
 from tqdm import tqdm
+from collections import defaultdict
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+from IPython.display import clear_output
 
 def flatten(d, parent_key='', sep='_'):
     items = []
@@ -54,26 +59,38 @@ def get_gradient_mean_and_std(vae, batch_xs, n_iterations, gradient_type):
     gradient_std = np.linalg.norm(gradients - gradients.mean(axis=0)) / np.sqrt(n_iterations)
     return gradients.mean(axis=0), gradient_std
 
-def train(vae, data, n_samples, batch_size, training_epochs=10, display_step=5, 
-          weights_save_step=5, save_weights=True, save_path='saved_weights/'):
-    test_loss = []
+def train(vaes, names, X_train, X_test, n_samples, batch_size, training_epochs, display_step, 
+          weights_save_step, save_weights=True, save_path='saved_weights/'):
+    test_loss = defaultdict(list)
     for epoch in tqdm(range(training_epochs)):
-        avg_cost = 0.
+        epoch_train_loss = defaultdict(list)
         total_batch = int(n_samples / batch_size)
         for i in range(total_batch):
-            batch_xs, _ = data.train.next_batch(batch_size)
-            vae.partial_fit(batch_xs)
-            cost = vae.loss(batch_xs)
-            avg_cost += cost / n_samples * batch_size
-        
-        test_loss.append(vae.loss(data.test.images))
+            batch_xs, _ = X_train.next_batch(batch_size)
+            for name, vae in zip(names, vaes):
+                vae.partial_fit(batch_xs)
+                cost = vae.loss(batch_xs)
+                epoch_train_loss[name].append(cost)
+        for name, vae in zip(names, vaes):
+            test_loss[name].append(vae.loss(X_test.images))
+
         if epoch % display_step == 0:
-            print('Epoch: {:04d}, cost = {:.9f}, test cost = {:.9f}' \
-                  .format(epoch+1, avg_cost, test_loss[-1]), flush=True)
-        
+            clear_output()
+            for name in names:
+                print('{0}: train cost = {1:.9f}, test cost = {2:.9f}'.format(name, np.mean(epoch_train_loss[name]), 
+                                                                              test_loss[name][-1]), flush=True)
+            plt.figure(figsize=(12, 8))
+            for name in names:
+                plt.plot(test_loss[name], label=name)
+            plt.title('Test loss')
+            plt.xlabel('epoch')
+            plt.ylabel('loss')
+            plt.legend(loc='best')
+            plt.show()
+
         if epoch % weights_save_step == 0:
             if save_weights == True:
-                vae.save_weights(save_path + '_{}'.format(epoch+1))
-    test_loss = np.array(test_loss)
-    vae.close()
-    return test_loss
+                for name, vae in zip(names, vaes):
+                    vae.save_weights(save_path + name + '_{}'.format(epoch+1))
+    for vae in vaes:
+        vae.close()

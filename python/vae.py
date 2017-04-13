@@ -16,9 +16,9 @@ class VAE(object):
         self.x_binarized = tf.cast(tf.random_uniform(tf.shape(self.x)) <= self.x, tf.float32)
         self.n_x = tf.cast(tf.shape(self.x)[1], tf.float32)
         
-        self._create_network()
+        self.__create_network()
         
-        self._create_loss_optimizer()
+        self.__create_loss_optimizer()
         
         self.init = tf.global_variables_initializer()
         self.saver = tf.train.Saver(self.flat_weights, max_to_keep=None)
@@ -29,7 +29,7 @@ class VAE(object):
     def __str__(self):
         return 'ReparamTrickVAE'
         
-    def _create_network(self):
+    def __create_network(self):
         self.weights = self._initialize_weights(**self.network_architecture)
         self._create_encoder_part()
         self.x_reconst = self._create_decoder_part(self.z)
@@ -72,7 +72,7 @@ class VAE(object):
         self.flat_weights = flatten(weights)
         return weights
     
-    def _create_loss_optimizer(self):
+    def __create_loss_optimizer(self):
         self._create_loss()
         self._create_optimizer()
     
@@ -167,25 +167,17 @@ class LogDerTrickVAE(VAE):
         return 'LogDerTrickVAE'
         
     def _create_network(self):
-        if not hasattr(self._create_network, 'is_called'):
-            self._create_network.__dict__['is_called'] = True
-            super()._create_network()
-            return None
         self.z = tf.stop_gradient(self.z)
         self.x_reconst = self._create_decoder_part(self.z)
     
     def _create_loss_optimizer(self):
-        if not hasattr(self._create_loss_optimizer, 'is_called'):
-            self._create_loss_optimizer.__dict__['is_called'] = True
-            super()._create_loss_optimizer()
-            return None
         self._create_loss()
         self.log_der_trick_cost = - self.encoder_log_density * self.decoder_log_density
         self.cost_for_encoder_weights = tf.reduce_mean(self.kl_divergency + self.log_der_trick_cost)
         self._create_optimizer()
 
 class MonteKarloVAE(VAE):
-    def __init__(self, *args, n_monte_karlo_samples=10, **kwargs):
+    def __init__(self, *args, n_monte_karlo_samples=2, **kwargs):
         super().__init__(*args, **kwargs)
         self.n_monte_karlo_samples = n_monte_karlo_samples
         
@@ -200,10 +192,6 @@ class MonteKarloVAE(VAE):
         return 'MonterKarloVAE'
         
     def _create_network(self):
-        if not hasattr(self._create_network, 'is_called'):
-            self._create_network.__dict__['is_called'] = True
-            super()._create_network()
-            return None
         self.z = tf.stop_gradient(self.z)
         self.x_reconst = self._create_decoder_part(self.z)
         
@@ -227,10 +215,6 @@ class MonteKarloVAE(VAE):
                                                 [self.n_monte_karlo_samples, tf.shape(self.x)[0], self.n_input])
     
     def _create_loss_optimizer(self):
-        if not hasattr(self._create_loss_optimizer, 'is_called'):
-            self._create_loss_optimizer.__dict__['is_called'] = True
-            super()._create_loss_optimizer()
-            return None
         self._create_loss()
         self.x_repeated = tf.tile(tf.reshape(self.x, [-1]), [self.n_monte_karlo_samples])
         self.x_repeated = tf.reshape(self.x_repeated, [self.n_monte_karlo_samples, -1, self.n_input])
@@ -246,8 +230,9 @@ class MonteKarloVAE(VAE):
         self._create_optimizer()
         
 class NVILVAE(VAE):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, baseline_learning_rate=1e-2, **kwargs):
         super().__init__(*args, **kwargs)
+        self.baseline_learning_rate = baseline_learning_rate
         
         self._create_network()
         
@@ -260,10 +245,6 @@ class NVILVAE(VAE):
         return 'NVILVAE'
         
     def _create_network(self):
-        if not hasattr(self._create_network, 'is_called'):
-            self._create_network.__dict__['is_called'] = True
-            super()._create_network()
-            return None
         self.z = tf.stop_gradient(self.z)
         self.x_reconst = self._create_decoder_part(self.z)
         
@@ -272,12 +253,9 @@ class NVILVAE(VAE):
         self.baseline = build_layer(tf.stop_gradient(self.encoder_layer2), 
                                     *self.baseline_weights)
         self.baseline_weights = list(self.baseline_weights)
+        self.baseline_saver = tf.train.Saver(self.baseline_weights, max_to_keep=None)
     
     def _create_loss_optimizer(self):
-        if not hasattr(self._create_loss_optimizer, 'is_called'):
-            self._create_loss_optimizer.__dict__['is_called'] = True
-            super()._create_loss_optimizer()
-            return None
         self._create_loss()
         
         self.nvil_cost = - self.encoder_log_density * (self.decoder_log_density - self.baseline)
@@ -285,13 +263,21 @@ class NVILVAE(VAE):
         self._create_optimizer()
         
         self.cost_for_baseline = tf.reduce_mean((self.decoder_log_density - self.baseline)**2)
-        self.baseline_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate)
+        self.baseline_optimizer = tf.train.AdamOptimizer(learning_rate=self.baseline_learning_rate)
         self.baseline_minimizer = self.decoder_optimizer.minimize(self.cost_for_baseline, 
                                                                  var_list=self.baseline_weights)
         
     def partial_fit(self, X):
         super().partial_fit(X)
         self.sess.run(self.baseline_minimizer, feed_dict={self.x: X})
+        
+    def save_weights(self, save_path):
+        super().save_weights(save_path)
+        self.baseline_saver.save(self.sess, save_path + '_baseline')
+        
+    def restore_weights(self, restore_path):
+        super().restore_weights(restore_path)
+        self.baseline_saver.restore(self.sess, restore_path + '_baseline')
         
 class MuPropVAE(VAE):
     def __init__(self, *args, **kwargs):
@@ -308,10 +294,6 @@ class MuPropVAE(VAE):
         return 'MuPropVAE'
         
     def _create_network(self):
-        if not hasattr(self._create_network, 'is_called'):
-            self._create_network.__dict__['is_called'] = True
-            super()._create_network()
-            return None
         self.z = tf.stop_gradient(self.z)
         self.x_reconst = self._create_decoder_part(self.z)
         
@@ -326,10 +308,6 @@ class MuPropVAE(VAE):
         self.deterministic_term = tf.reduce_sum(jacobian * self.z_mean, axis=1)
     
     def _create_loss_optimizer(self):
-        if not hasattr(self._create_loss_optimizer, 'is_called'):
-            self._create_loss_optimizer.__dict__['is_called'] = True
-            super()._create_loss_optimizer()
-            return None
         self._create_loss()
         
         self.decoder_log_density_adjusted = self.decoder_log_density - self.decoder_log_density_mean
