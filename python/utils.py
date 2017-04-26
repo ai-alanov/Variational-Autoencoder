@@ -44,8 +44,26 @@ def log_normal_density(x, mu, sigma=1):
 def bernoulli_logit_density(x, f):
     return tf.reduce_sum(x * tf.log(1e-8 + f) + (1. - x) * tf.log(1e-8 + 1 - f), -1)
 
-def kl_divergency(mu, sigma):
-    return -0.5 * tf.reduce_sum(1 + 2 * tf.log(sigma) - mu ** 2 - sigma ** 2, 1)
+def log_density(params, distribution='multinomial'):
+    if distribution == 'multinomial':
+        x, probs = params['x'], params['probs']
+        if len(params.values()) < 3:
+            return tf.reduce_sum(x * tf.log(1e-8 + probs) + (1. - x) * tf.log(1e-8 + 1 - probs), -1)
+        return tf.reduce_sum(x * tf.log(1e-8 + probs), 1)
+    elif distribution == 'gaussian':
+        x, mu, sigma = params['x'], params['mu'], params['sigma']
+        return -0.5 * tf.reduce_sum(((x - mu) / sigma) ** 2 + tf.log(2 * np.pi) + 2 * tf.log(sigma), 1)
+    raise ValueError('Unsupported distribution!') 
+
+def kl_divergency(params, distribution='multinomial'):
+    if distribution == 'gaussian':
+        mu, sigma = params['mu'], params['sigma']
+        return -0.5 * tf.reduce_sum(1 + 2 * tf.log(sigma) - mu ** 2 - sigma ** 2, 1)
+    if distribution == 'multinomial':
+        q_probs = params['probs']
+        prior_probs = params['prior_probs']
+        return tf.reduce_sum(q_probs * (tf.log(1e-8 + q_probs) - tf.log(prior_probs)), 1)
+    raise ValueError('Unsupported distribution!') 
 
 def get_gradient_mean_and_std(vae, batch_xs, n_iterations, gradient_type):
     gradients = []
@@ -68,7 +86,7 @@ def train(vaes, names, X_train, X_test, n_samples, batch_size, training_epochs, 
         for i in range(total_batch):
             batch_xs, _ = X_train.next_batch(batch_size)
             for name, vae in zip(names, vaes):
-                vae.partial_fit(batch_xs)
+                vae.partial_fit(batch_xs, epoch=epoch+1)
                 cost = vae.loss(batch_xs)
                 epoch_train_loss[name].append(cost)
         for name, vae in zip(names, vaes):
@@ -94,3 +112,4 @@ def train(vaes, names, X_train, X_test, n_samples, batch_size, training_epochs, 
                     vae.save_weights(save_path + name + '_{}'.format(epoch+1))
     for vae in vaes:
         vae.close()
+    tf.reset_default_graph()
