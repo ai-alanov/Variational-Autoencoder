@@ -1,6 +1,7 @@
 import numpy as np
 import tensorflow as tf
 import collections
+import os
 from itertools import chain
 from tqdm import tqdm
 from collections import defaultdict
@@ -27,6 +28,22 @@ def xavier_init(fan_in, fan_out, constant=1):
                              minval=low, maxval=high, 
                              dtype=tf.float32)
 
+def sample_gumbel(shape, eps=1e-20): 
+    U = tf.random_uniform(shape,minval=0,maxval=1)
+    return -tf.log(-tf.log(U + eps) + eps)
+
+def gumbel_softmax_sample(logits, temperature): 
+    y = logits + sample_gumbel(tf.shape(logits))
+    return tf.nn.softmax( y / temperature)
+
+def gumbel_softmax(logits, temperature, hard=False):
+    y = gumbel_softmax_sample(logits, temperature)
+    if hard:
+        k = tf.shape(logits)[-1]
+        y_hard = tf.cast(tf.equal(y,tf.reduce_max(y,1,keep_dims=True)),y.dtype)
+        y = tf.stop_gradient(y_hard - y) + y
+    return y
+
 def init_weights(n_in, n_out, name):
     w = tf.Variable(xavier_init(n_in, n_out), name=name)
     b = tf.Variable(tf.zeros([n_out]), name=name + '_b')
@@ -42,7 +59,9 @@ def log_normal_density(x, mu, sigma=1):
     return -0.5 * tf.reduce_sum(((x - mu) / sigma) ** 2 + tf.log(2 * np.pi) + 2 * tf.log(sigma), 1)
 
 def bernoulli_logit_density(x, f):
-    return tf.reduce_sum(x * tf.log(1e-8 + f) + (1. - x) * tf.log(1e-8 + 1 - f), -1)
+    f *= 1 - 2e-7
+    f += 1e-7
+    return tf.reduce_sum(x * tf.log(f) + (1. - x) * tf.log(1 - f), -1)
 
 def log_density(params, distribution='multinomial'):
     if distribution == 'multinomial':
@@ -108,6 +127,8 @@ def train(vaes, names, X_train, X_test, n_samples, batch_size, training_epochs, 
 
         if epoch % weights_save_step == 0:
             if save_weights == True:
+                if not os.path.exists(save_path):
+                    os.makedirs(save_path)
                 for name, vae in zip(names, vaes):
                     vae.save_weights(save_path + name + '_{}'.format(epoch+1))
     for vae in vaes:

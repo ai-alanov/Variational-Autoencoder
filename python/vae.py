@@ -6,7 +6,8 @@ from itertools import chain
 
 class VAE(object):
     def __init__(self, n_input, n_z, network_architecture, learning_rate, 
-                 encoder_distribution='multinomial', decoder_distribution='multinomial', n_ary=None):
+                 encoder_distribution='multinomial', decoder_distribution='multinomial', 
+                 nonlinearity=tf.nn.softplus, n_ary=None):
         self.n_input = n_input
         self.n_z = n_z
         self.network_architecture = network_architecture
@@ -14,12 +15,13 @@ class VAE(object):
         self.learning_rate = tf.placeholder(tf.float32, shape=[])
         self.encoder_distribution = encoder_distribution
         self.decoder_distribution = decoder_distribution
+        self.nonlinearity = nonlinearity
         self.n_ary = n_ary
         
         self.x = tf.placeholder(tf.float32, [None, n_input])
         self.x_binarized = tf.cast(tf.random_uniform(tf.shape(self.x)) <= self.x, tf.float32)
         
-        self.prior_probs = 0.5*tf.ones([tf.shape(self.x)[0], self.n_ary*self.n_z])
+        self.prior_probs = (1./self.n_ary)*tf.ones([tf.shape(self.x)[0], self.n_ary*self.n_z])
         
         self.__create_network()
         
@@ -53,8 +55,9 @@ class VAE(object):
         weights = self.weights
         x = self.x_binarized
         
-        self.encoder_layer1 = build_layer(x, *weights['encoder']['h1'], nonlinearity=tf.nn.softplus)
-        self.encoder_layer2 = build_layer(self.encoder_layer1, *weights['encoder']['h2'], nonlinearity=tf.nn.softplus)
+        self.encoder_layer1 = build_layer(x, *weights['encoder']['h1'], nonlinearity=self.nonlinearity)
+        self.encoder_layer2 = build_layer(self.encoder_layer1, *weights['encoder']['h2'], 
+                                          nonlinearity=self.nonlinearity)
         self.z_mean = build_layer(self.encoder_layer2, *weights['encoder']['out_mean'])
         
         if self.encoder_distribution == 'gaussian':
@@ -70,8 +73,8 @@ class VAE(object):
     
     def _create_decoder_part(self, z):
         weights = self.weights
-        decoder_layer1 = build_layer(z, *weights['decoder']['h1'], nonlinearity=tf.nn.softplus)
-        decoder_layer2 = build_layer(decoder_layer1, *weights['decoder']['h2'], nonlinearity=tf.nn.softplus)
+        decoder_layer1 = build_layer(z, *weights['decoder']['h1'], nonlinearity=self.nonlinearity)
+        decoder_layer2 = build_layer(decoder_layer1, *weights['decoder']['h2'], nonlinearity=self.nonlinearity)
         x_reconst = build_layer(decoder_layer2, *weights['decoder']['out_mean'], nonlinearity=tf.nn.sigmoid)
         return x_reconst
     
@@ -316,10 +319,10 @@ class MuPropVAE(VAE):
         
         jacobian = tf.gradients(self.decoder_log_density_mean, self.z_mean)[0]
         self.decoder_log_density_mean = tf.stop_gradient(self.decoder_log_density_mean)
-        jacobian = tf.stop_gradient(jacobian)
+        self.jacobian = tf.stop_gradient(jacobian)
         
-        self.linear_part = tf.stop_gradient(tf.reduce_sum(jacobian * (self.z - self.z_mean), axis=1))
-        self.deterministic_term = tf.reduce_sum(jacobian * self.z_mean, axis=1)
+        self.linear_part = tf.stop_gradient(tf.reduce_sum(self.jacobian * (self.z - self.z_mean), axis=1))
+        self.deterministic_term = tf.reduce_sum(self.jacobian * self.z_mean, axis=1)
     
     def _create_loss_optimizer(self):
         self._create_loss()
@@ -329,6 +332,38 @@ class MuPropVAE(VAE):
         self.muprop_cost = - self.encoder_log_density * self.decoder_log_density_adjusted
         self.muprop_cost -= self.deterministic_term
         self.cost_for_encoder_weights = tf.reduce_mean(self.kl_divergency + self.muprop_cost)
+        self._create_optimizer()
+        
+    def partial_fit(self, X, epoch=None):
+        super().partial_fit(X)
+        
+class GumbelSoftmaxTrickVAE(VAE):
+    def __init__(self, *args, temperature=0.1, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.temperature = temperature
+        
+        if self.encoder_distribution is not 'multinomial':
+            raise ValueError(str(self) + ' does not support the encoder distribution')
+        
+        self._create_network()
+        
+        self._create_loss_optimizer()
+        
+        self.init = tf.global_variables_initializer()
+        self.sess.run(self.init)
+        
+    def __str__(self):
+        return 'GumbelSoftmaxTrickVAE'
+        
+    def _create_network(self):
+        self.z_mean = tf.reshape(self.z_mean, [tf.shape(self.x)[0]*self.n_z, self.n_ary])
+        self.z_probs = tf.reshape(tf.nn.softmax(self.z_mean), [tf.shape(self.x)[0], self.n_ary*self.n_z])
+        
+        self.z = tf.reshape(gumbel_softmax(self.z_mean, self.temperature), [tf.shape(self.x)[0], self.n_ary*self.n_z])
+        self.x_reconst = self._create_decoder_part(self.z)
+    
+    def _create_loss_optimizer(self):
+        self._create_loss()
         self._create_optimizer()
         
     def partial_fit(self, X, epoch=None):
