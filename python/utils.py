@@ -21,6 +21,13 @@ def flatten(d, parent_key='', sep='_'):
             items.append((new_key + '_b', v[1]))
     return dict(items)
 
+def unroll_tensor(x):
+    s = tf.shape(x)
+    return tf.reshape(x, tf.stack([s[0] * s[1], s[2]])), s
+
+def roll_tensor(x, sh):
+    return tf.reshape(x, tf.stack([sh[0], sh[1], tf.shape(x)[1]]))
+
 def xavier_init(fan_in, fan_out, constant=1): 
     low = -constant*np.sqrt(6.0/(fan_in + fan_out)) 
     high = constant*np.sqrt(6.0/(fan_in + fan_out))
@@ -44,9 +51,9 @@ def gumbel_softmax(logits, temperature, hard=False):
         y = tf.stop_gradient(y_hard - y) + y
     return y
 
-def init_weights(n_in, n_out, name):
+def init_weights(n_in, n_out, name, bias=None):
     w = tf.Variable(xavier_init(n_in, n_out), name=name)
-    b = tf.Variable(tf.zeros([n_out]), name=name + '_b')
+    b = tf.Variable(tf.zeros([n_out]), name=name + '_b') if bias is None else tf.Variable(bias)
     return w, b
 
 def build_layer(x, w, b, nonlinearity=None):
@@ -55,34 +62,45 @@ def build_layer(x, w, b, nonlinearity=None):
         y = nonlinearity(y)
     return y
 
-def log_normal_density(x, mu, sigma=1):
-    return -0.5 * tf.reduce_sum(((x - mu) / sigma) ** 2 + tf.log(2 * np.pi) + 2 * tf.log(sigma), 1)
-
-def bernoulli_logit_density(x, f):
-    f *= 1 - 2e-7
-    f += 1e-7
-    return tf.reduce_sum(x * tf.log(f) + (1. - x) * tf.log(1 - f), -1)
-
-def log_density(params, distribution='multinomial'):
-    if distribution == 'multinomial':
-        x, probs = params['x'], params['probs']
-        if len(params.values()) < 3:
-            return tf.reduce_sum(x * tf.log(1e-8 + probs) + (1. - x) * tf.log(1e-8 + 1 - probs), -1)
-        return tf.reduce_sum(x * tf.log(1e-8 + probs), 1)
-    elif distribution == 'gaussian':
+def compute_log_density(**params):
+    if params['distribution'] == 'multinomial':
+        x, logits = params['x'], params['logits']
+        if len(params.values()) < 4:
+            logp = -tf.nn.softplus(-logits)
+            logip = -tf.nn.softplus(logits)
+            return tf.reduce_sum(x * logp + (1. - x) * logip, -1)
+        return tf.reduce_sum(-tf.nn.softmax_cross_entropy_with_logits(labels=x, logits=logits), -1)
+    elif params['distribution'] == 'gaussian':
         x, mu, sigma = params['x'], params['mu'], params['sigma']
-        return -0.5 * tf.reduce_sum(((x - mu) / sigma) ** 2 + tf.log(2 * np.pi) + 2 * tf.log(sigma), 1)
+        return -0.5 * tf.reduce_sum(((x - mu) / sigma) ** 2 + tf.log(2 * np.pi) + 2 * tf.log(sigma), 2)
     raise ValueError('Unsupported distribution!') 
 
-def kl_divergency(params, distribution='multinomial'):
-    if distribution == 'gaussian':
+def compute_kl_divergency(**params):
+    if params['distribution'] == 'gaussian':
         mu, sigma = params['mu'], params['sigma']
-        return -0.5 * tf.reduce_sum(1 + 2 * tf.log(sigma) - mu ** 2 - sigma ** 2, 1)
-    if distribution == 'multinomial':
+        return -0.5 * tf.reduce_sum(1 + 2 * tf.log(sigma) - mu ** 2 - sigma ** 2, 2)
+    if params['distribution'] == 'multinomial':
         q_probs = params['probs']
+        q_logits = params['logits']
         prior_probs = params['prior_probs']
-        return tf.reduce_sum(q_probs * (tf.log(1e-8 + q_probs) - tf.log(prior_probs)), 1)
+        kl = tf.reduce_sum(q_probs * (tf.nn.log_softmax(q_logits) - tf.log(prior_probs)), [-2, -1])
+        return kl
     raise ValueError('Unsupported distribution!') 
+    
+def compute_multisample_elbo(log_density, kl_divergency, is_vimco=False):
+    multisample_elbo = log_density - kl_divergency
+    multisample_elbo = tf.transpose(multisample_elbo)
+    max_w = tf.reduce_max(multisample_elbo, 0)
+    adjusted_w = tf.exp(multisample_elbo - max_w)
+    n_samples = tf.cast(tf.shape(adjusted_w)[0], tf.float32)
+    if is_vimco is True:
+        vimco_baseline = tf.reduce_mean(adjusted_w, 0) - adjusted_w / n_samples
+        vimco_baseline = max_w + tf.log(1e-5 + vimco_baseline)
+    adjusted_w = tf.reduce_mean((adjusted_w), 0)
+    multisample_elbo = max_w + tf.log(adjusted_w)
+    if is_vimco is True:
+        multisample_elbo = multisample_elbo - tf.stop_gradient(vimco_baseline)
+    return multisample_elbo
 
 def get_gradient_mean_and_std(vae, batch_xs, n_iterations, gradient_type):
     gradients = []
@@ -99,21 +117,34 @@ def get_gradient_mean_and_std(vae, batch_xs, n_iterations, gradient_type):
 def train(vaes, names, X_train, X_test, n_samples, batch_size, training_epochs, display_step, 
           weights_save_step, save_weights=True, save_path='saved_weights/'):
     test_loss = defaultdict(list)
+    learning_rate_step = 0
+    steps = 0
     for epoch in tqdm(range(training_epochs)):
         epoch_train_loss = defaultdict(list)
         total_batch = int(n_samples / batch_size)
         for i in range(total_batch):
             batch_xs, _ = X_train.next_batch(batch_size)
+            batch_xs = batch_xs[:, None, :]
             for name, vae in zip(names, vaes):
-                vae.partial_fit(batch_xs, epoch=epoch+1)
-                cost = vae.loss(batch_xs)
+                cost = vae.partial_fit(batch_xs)
                 epoch_train_loss[name].append(cost)
-        for name, vae in zip(names, vaes):
-            test_loss[name].append(vae.loss(X_test.images))
+        steps += 1
+        if 3 ** learning_rate_step == steps:
+            learning_rate_step += 1
+            steps = 0
 
         if epoch % display_step == 0:
             clear_output()
+            epoch_test_loss = defaultdict(list)
+            test_batch_size = 50
+            total_batch = int(X_test.num_examples / test_batch_size)
+            for i in range(total_batch):
+                batch_xs, _ = X_test.next_batch(batch_size)
+                batch_xs = batch_xs[:, None, :]
+                for name, vae in zip(names, vaes):
+                    epoch_test_loss[name].append(vae.loss(batch_xs, n_samples=2))
             for name in names:
+                test_loss[name].append(np.mean(epoch_test_loss[name]))
                 print('{0}: train cost = {1:.9f}, test cost = {2:.9f}'.format(name, np.mean(epoch_train_loss[name]), 
                                                                               test_loss[name][-1]), flush=True)
             plt.figure(figsize=(12, 8))
