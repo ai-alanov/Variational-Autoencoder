@@ -114,54 +114,234 @@ def get_gradient_mean_and_std(vae, batch_xs, n_iterations, gradient_type):
     gradient_std = np.linalg.norm(gradients - gradients.mean(axis=0)) / np.sqrt(n_iterations)
     return gradients.mean(axis=0), gradient_std
 
-def train(vaes, names, X_train, X_test, n_samples, batch_size, training_epochs, display_step, 
-          weights_save_step, save_weights=True, save_path='saved_weights/'):
+def set_up_cuda_devices(cuda_devices):
+    if cuda_devices is not None:
+        os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+        os.environ["CUDA_VISIBLE_DEVICES"] = cuda_devices
+        
+def set_up_vaes(vaes, common_params, learning_rates):
+    vaes = [vae(**common_params, learning_rate=learning_rate) 
+            for vae, learning_rate in zip(vaes, learning_rates)]
+    return vaes
+
+def run_epoch(vaes, data, n_samples, batch_size, obj_samples, is_train=True,
+              need_to_restore=False, save_path=None, epoch=None):
+    costs = defaultdict(list)
+    n_batches = int(n_samples / batch_size)
+    for _ in range(n_batches):
+        batch_xs, _ = data.next_batch(batch_size)
+        batch_xs = batch_xs[:, None, :]
+        for vae in vaes:
+            if is_train:
+                cost = vae.partial_fit(batch_xs, n_samples=obj_samples)
+            else:
+                if need_to_restore:
+                    vae.restore_weights(save_path + vae.name() + '_{}'.format(epoch+1))
+                cost = vae.loss(batch_xs, n_samples=obj_samples)
+            costs[vae.name()].append(cost)
+    return dict([(vae.name(), np.mean(costs[vae.name()])) for vae in vaes])
+
+def run_train_step(vaes, train_params):
+    return run_epoch(vaes, **train_params)
+
+def run_epoch_evaluation(vaes, test_params, **kwargs):
+    return run_epoch(vaes, **test_params, is_train=False, **kwargs)
+
+def print_costs(vaes, test_costs, train_costs=None):
+    for vae in vaes:
+        name = vae.name()
+        train_output = 'train cost = {:.9f}, '.format(train_costs[name]) if train_costs else ''
+        test_output = 'test cost = {:.9f}'.format(test_costs[name])
+        print(name + ': ' + train_output + test_output, flush=True)
+        
+def plot_loss(vaes, loss, epoch, step, loss_name='Test', start=0):
+    plt.figure(figsize=(12, 8))
+    for vae in vaes:
+        name = vae.name()
+        plt.plot(np.arange(start, epoch+1, step), loss[name], label=name)
+    plt.title('{} loss'.format(loss_name))
+    plt.xlabel('epoch')
+    plt.ylabel('loss')
+    plt.legend(loc='best')
+    plt.show()
+    
+def save_vae_weights(vaes, epoch, save_path):
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+    for vae in vaes:
+        vae.save_weights(save_path + vae.name() + '_{}'.format(epoch+1))
+        
+def train_model(vaes, vae_params, train_params, test_params, config_params):
+    set_up_cuda_devices(config_params['cuda_devices'])
+    vaes = set_up_vaes(vaes, **vae_params)
     test_loss = defaultdict(list)
-    learning_rate_step = 0
-    steps = 0
-    for epoch in tqdm(range(training_epochs)):
-        epoch_train_loss = defaultdict(list)
-        total_batch = int(n_samples / batch_size)
-        for i in range(total_batch):
-            batch_xs, _ = X_train.next_batch(batch_size)
-            batch_xs = batch_xs[:, None, :]
-            for name, vae in zip(names, vaes):
-                cost = vae.partial_fit(batch_xs)
-                epoch_train_loss[name].append(cost)
-        steps += 1
-        if 3 ** learning_rate_step == steps:
-            learning_rate_step += 1
-            steps = 0
-
-        if epoch % display_step == 0:
+    for epoch in tqdm(range(config_params['n_epochs'])):
+        train_costs = run_train_step(vaes, train_params)
+        if epoch % config_params['display_step'] == 0:
+            test_costs = run_epoch_evaluation(vaes, test_params)
+            for vae in vaes:
+                test_loss[vae.name()].append(test_costs[vae.name()])
             clear_output()
-            epoch_test_loss = defaultdict(list)
-            test_batch_size = 50
-            total_batch = int(X_test.num_examples / test_batch_size)
-            for i in range(total_batch):
-                batch_xs, _ = X_test.next_batch(batch_size)
-                batch_xs = batch_xs[:, None, :]
-                for name, vae in zip(names, vaes):
-                    epoch_test_loss[name].append(vae.loss(batch_xs, n_samples=2))
-            for name in names:
-                test_loss[name].append(np.mean(epoch_test_loss[name]))
-                print('{0}: train cost = {1:.9f}, test cost = {2:.9f}'.format(name, np.mean(epoch_train_loss[name]), 
-                                                                              test_loss[name][-1]), flush=True)
-            plt.figure(figsize=(12, 8))
-            for name in names:
-                plt.plot(test_loss[name], label=name)
-            plt.title('Test loss')
-            plt.xlabel('epoch')
-            plt.ylabel('loss')
-            plt.legend(loc='best')
-            plt.show()
-
-        if epoch % weights_save_step == 0:
-            if save_weights == True:
-                if not os.path.exists(save_path):
-                    os.makedirs(save_path)
-                for name, vae in zip(names, vaes):
-                    vae.save_weights(save_path + name + '_{}'.format(epoch+1))
+            print_costs(vaes, test_costs, train_costs)
+            plot_loss(vaes, test_loss, epoch, config_params['display_step'])
+        if epoch % config_params['save_step'] == 0:
+            if config_params['save_weights'] == True:
+                save_vae_weights(vaes, epoch, config_params['save_path'])
     for vae in vaes:
         vae.close()
     tf.reset_default_graph()
+            
+def test_model(vaes, vae_params, test_params, config_params):
+    set_up_cuda_devices(config_params['cuda_devices'])
+    vaes = set_up_vaes(vaes, **vae_params)
+    test_loss = defaultdict(list)
+    for epoch in tqdm(range(config_params['save_step'], config_params['n_epochs'], config_params['save_step'])):
+        test_costs = run_epoch_evaluation(vaes, test_params, need_to_restore=True, 
+                                          save_path=config_params['save_path'], epoch=epoch)
+        for vae in vaes:
+            test_loss[vae.name()].append(test_costs[vae.name()])
+        clear_output()
+        print_costs(vaes, test_costs)
+        plot_loss(vaes, test_loss, epoch, config_params['save_step'], start=config_params['save_step'])
+    for vae in vaes:
+        vae.close()
+    tf.reset_default_graph()
+    
+def get_batch(data, batch_size):     #ToDo: get random batch
+    batch_xs, _ = data.next_batch(batch_size)
+    batch_xs = batch_xs[:, None, :]
+    return batch_xs
+
+def calculate_stds(vaes, batch_xs, n_epochs, save_step, save_path, n_iterations, vae_part):
+    stds = defaultdict(lambda: defaultdict(list))
+    for weights_name in tqdm(map(lambda x: x.name(), vaes)):
+        for vae in vaes:
+            if vae.name() == 'NVILVAE' and weights_name != 'NVILVAE':
+                continue
+            for saved_index in range(1, n_epochs+1, save_step):
+                vae.restore_weights(save_path + weights_name + '_{}'.format(saved_index))
+                _, std = get_gradient_mean_and_std(vae, batch_xs, n_iterations, vae_part)
+                stds[weights_name][vae.name()].append(std)
+    return stds
+    
+def consider_stds(vaes, vae_params, data, n_epochs, batch_size, n_iterations, save_step, save_path, cuda_devices):
+    set_up_cuda_devices('cuda_devices')
+    vaes = set_up_vaes(vaes, **vae_params)
+    batch_xs = get_batch(data, batch_size)
+    
+    encoder_stds = calculate_stds(vaes, batch_xs, n_epochs, save_step, save_path, n_iterations, 'encoder')
+    decoder_stds = calculate_stds(vaes, batch_xs, n_epochs, save_step, save_path, n_iterations, 'decoder')
+    
+    for vae in vaes:
+            vae.close()
+    tf.reset_default_graph()
+    
+    n_vaes = len(vaes)
+    weights_range = np.arange(1, n_epochs+1, save_step)
+
+    fig, axes = plt.subplots(n_vaes, 2, figsize=(16, 40))
+    for idx, weights_name in enumerate(map(lambda x: x.name(), vaes)):
+        for name in map(lambda x: x.name(), vaes):
+            if name == 'NVILVAE' and weights_name != 'NVILVAE':
+                continue
+            axes[idx][0].plot(weights_range, np.log10(encoder_stds[weights_name][name]), 
+                              label='{} encoder log-std'.format(name))
+            axes[idx][1].plot(weights_range, np.log10(decoder_stds[weights_name][name]), 
+                              label='{} decoder log-std'.format(name))
+        axes[idx][0].set_title('Encoder log-std, {} weights'.format(weights_name))
+        axes[idx][0].set_xlabel('epoch')
+        axes[idx][0].set_ylabel('log-std')
+        axes[idx][0].legend(loc='best')
+
+        axes[idx][1].set_title('Decoder log-std, {} weights'.format(weights_name))
+        axes[idx][1].set_xlabel('epoch')
+        axes[idx][1].set_ylabel('log-std')
+        axes[idx][1].legend(loc='best')
+    plt.show()
+    
+
+# def train(vaes, names, X_train, X_test, train_batch_size, test_batch_size, train_obj_samples, test_obj_samples,
+#           training_epochs, display_step, weights_save_step, 
+#           save_weights=True, save_path='saved_weights/', cuda_devices=None):
+#     if cuda_devices is not None:
+#         os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+#         os.environ["CUDA_VISIBLE_DEVICES"] = cuda_devices
+#     test_loss = defaultdict(list)
+#     n_train_samples = X_train.num_examples
+#     n_test_samples = X_test.num_examples
+#     for epoch in tqdm(range(training_epochs)):
+#         epoch_train_loss = defaultdict(list)
+#         total_batch = int(n_train_samples / train_batch_size)
+#         for i in range(total_batch):
+#             batch_xs, _ = X_train.next_batch(train_batch_size)
+#             batch_xs = batch_xs[:, None, :]
+#             for name, vae in zip(names, vaes):
+#                 cost = vae.partial_fit(batch_xs, n_samples=train_obj_samples)
+#                 epoch_train_loss[name].append(cost)
+
+#         if epoch % display_step == 0:
+#             clear_output()
+#             epoch_test_loss = defaultdict(list)
+#             total_batch = int(n_test_samples / test_batch_size)
+#             for i in range(total_batch):
+#                 batch_xs, _ = X_test.next_batch(test_batch_size)
+#                 batch_xs = batch_xs[:, None, :]
+#                 for name, vae in zip(names, vaes):
+#                     epoch_test_loss[name].append(vae.loss(batch_xs, n_samples=test_obj_samples))
+#             for name in names:
+#                 test_loss[name].append(np.mean(epoch_test_loss[name]))
+#                 print('{0}: train cost = {1:.9f}, test cost = {2:.9f}'.format(name, np.mean(epoch_train_loss[name]), 
+#                                                                               test_loss[name][-1]), flush=True)
+#             plt.figure(figsize=(12, 8))
+#             for name in names:
+#                 plt.plot(np.arange(0, epoch+1, display_step), test_loss[name], label=name)
+#             plt.title('Test loss')
+#             plt.xlabel('epoch')
+#             plt.ylabel('loss')
+#             plt.legend(loc='best')
+#             plt.show()
+
+#         if epoch % weights_save_step == 0:
+#             if save_weights == True:
+#                 if not os.path.exists(save_path):
+#                     os.makedirs(save_path)
+#                 for name, vae in zip(names, vaes):
+#                     vae.save_weights(save_path + name + '_{}'.format(epoch+1))
+#     for vae in vaes:
+#         vae.close()
+#     tf.reset_default_graph()
+    
+# def test(vaes, names, X_test, test_batch_size, test_obj_samples,
+#           training_epochs, display_step, weights_save_step, 
+#           save_path='saved_weights/', cuda_devices=None):
+#     if cuda_devices is not None:
+#         os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+#         os.environ["CUDA_VISIBLE_DEVICES"] = cuda_devices
+#     test_loss = defaultdict(list)
+#     n_test_samples = X_test.num_examples
+#     for test_epoch in tqdm(range(0, training_epochs, weights_save_step)):
+#         epoch_test_loss = defaultdict(list)
+#         total_batch = int(n_test_samples / test_batch_size)
+#         for i in range(total_batch):
+#             batch_xs, _ = X_test.next_batch(test_batch_size)
+#             batch_xs = batch_xs[:, None, :]
+#             for name, vae in zip(names, vaes):
+#                 vae.restore_weights(save_path + name + '_{}'.format(test_epoch+1))
+#                 epoch_test_loss[name].append(vae.loss(batch_xs, n_samples=test_obj_samples))
+#         clear_output()
+#         for name in names:
+#             test_loss[name].append(np.mean(epoch_test_loss[name]))
+#             print('{0}: train cost = {1:.9f}, test cost = {2:.9f}'.format(name, np.mean(epoch_test_loss[name]), 
+#                                                                           test_loss[name][-1]), flush=True)
+#         plt.figure(figsize=(12, 8))
+#         for name in names:
+#             plt.plot(np.arange(0, test_epoch+1, weights_save_step), test_loss[name], label=name)
+#         plt.title('Test loss')
+#         plt.xlabel('epoch')
+#         plt.ylabel('loss')
+#         plt.legend(loc='best')
+#         plt.show()
+
+#     for vae in vaes:
+#         vae.close()
+#     tf.reset_default_graph()

@@ -151,19 +151,26 @@ class VAE(object):
                                            self.n_samples: n_samples})
         return cost
     
-    def get_decoder_gradients(self, X):
+    def name(self):
+        return str(self)
+    
+    def get_decoder_gradients(self, X, learning_rate=None, n_samples=None):
+        learning_rate = self.learning_rate_value if learning_rate is None else learning_rate
+        n_samples = self.n_samples_value if n_samples is None else n_samples 
         gradients = self.sess.run(self.decoder_gradients, feed_dict={self.x: X, 
-                                                                     self.learning_rate: self.learning_rate_value, 
-                                                                     self.n_samples: self.n_samples_value})
+                                                                     self.learning_rate: learning_rate, 
+                                                                     self.n_samples: n_samples})
         flat_gradients = np.array([])
         for grad in gradients:
             flat_gradients = np.append(flat_gradients, grad[0].flatten())
         return flat_gradients
     
-    def get_encoder_gradients(self, X):
+    def get_encoder_gradients(self, X, learning_rate=None, n_samples=None):
+        learning_rate = self.learning_rate_value if learning_rate is None else learning_rate
+        n_samples = self.n_samples_value if n_samples is None else n_samples 
         gradients = self.sess.run(self.encoder_gradients, feed_dict={self.x: X, 
-                                                                     self.learning_rate: self.learning_rate_value, 
-                                                                     self.n_samples: self.n_samples_value})
+                                                                     self.learning_rate: learning_rate, 
+                                                                     self.n_samples: n_samples})
         flat_gradients = np.array([])
         for grad in gradients:
             flat_gradients = np.append(flat_gradients, grad[0].flatten())
@@ -300,10 +307,12 @@ class NVILVAE(VAE):
         self.baseline_minimizer = self.decoder_optimizer.minimize(self.cost_for_baseline, 
                                                                  var_list=self.baseline_weights)
         
-    def partial_fit(self, X, epoch=None):
-        cost = super().partial_fit(X)
-        self.sess.run(self.baseline_minimizer, feed_dict={self.x: X, self.learning_rate: self.learning_rate_value,
-                                                          self.n_samples: self.n_samples_value})
+    def partial_fit(self, X, learning_rate_decay=1.0, n_samples=None):
+        cost = super().partial_fit(X, learning_rate_decay, n_samples)
+        learning_rate = learning_rate_decay * self.learning_rate_value
+        n_samples = self.n_samples_value if n_samples is None else n_samples
+        self.sess.run(self.baseline_minimizer, feed_dict={self.x: X, self.learning_rate: learning_rate,
+                                                          self.n_samples: n_samples})
         return cost
         
     def save_weights(self, save_path):
