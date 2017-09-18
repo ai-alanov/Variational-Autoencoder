@@ -80,10 +80,10 @@ def compute_kl_divergency(**params):
         mu, sigma = params['mu'], params['sigma']
         return -0.5 * tf.reduce_sum(1 + 2 * tf.log(sigma) - mu ** 2 - sigma ** 2, 2)
     if params['distribution'] == 'multinomial':
-        q_probs = params['probs']
+        q_samples = params['x']
         q_logits = params['logits']
         prior_probs = params['prior_probs']
-        kl = tf.reduce_sum(q_probs * (tf.nn.log_softmax(q_logits) - tf.log(prior_probs)), [-2, -1])
+        kl = tf.reduce_sum(q_samples * (tf.nn.log_softmax(q_logits) - tf.log(prior_probs)), [-2, -1])
         return kl
     raise ValueError('Unsupported distribution!') 
     
