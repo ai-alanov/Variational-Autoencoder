@@ -7,7 +7,7 @@ from itertools import chain
 class VAE(object):
     def __init__(self, n_input, n_z, network_architecture, learning_rate, 
                  encoder_distribution='multinomial', decoder_distribution='multinomial', 
-                 nonlinearity=tf.nn.softplus, n_ary=None, n_samples=1, train_bias=None):
+                 nonlinearity=tf.nn.softplus, n_ary=None, n_samples=1, train_bias=None, mem_fraction=0.333):
         self.n_input = n_input
         self.n_z = n_z
         self.network_architecture = network_architecture
@@ -34,8 +34,9 @@ class VAE(object):
 
         self.init = tf.global_variables_initializer()
         self.saver = tf.train.Saver(self.flat_weights, max_to_keep=None)
-
-        self.sess = tf.Session()
+        
+        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=mem_fraction)
+        self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
         self.sess.run(self.init)
         
     def __str__(self):
