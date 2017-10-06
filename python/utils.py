@@ -10,6 +10,11 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from IPython.display import clear_output
 
+from tensorflow.contrib.learn.python.learn.datasets import base, mnist
+from tensorflow.python.framework import dtypes
+
+import vae
+
 def flatten(d, parent_key='', sep='_'):
     items = []
     for k, v in d.items():
@@ -123,14 +128,18 @@ def set_up_vaes(vaes, common_params, learning_rates):
     vaes = [vae(**common_params, learning_rate=learning_rate) 
             for vae, learning_rate in zip(vaes, learning_rates)]
     return vaes
+    
+def get_batch(data, batch_size):     #ToDo: get random batch
+    batch_xs, _ = data.next_batch(batch_size)
+    batch_xs = batch_xs[:, None, :]
+    return batch_xs
 
 def run_epoch(vaes, data, n_samples, batch_size, obj_samples, is_train=True,
               need_to_restore=False, save_path=None, epoch=None):
     costs = defaultdict(list)
     n_batches = int(n_samples / batch_size)
     for _ in range(n_batches):
-        batch_xs, _ = data.next_batch(batch_size)
-        batch_xs = batch_xs[:, None, :]
+        batch_xs = get_batch(data, batch_size)
         for vae in vaes:
             if is_train:
                 cost = vae.partial_fit(batch_xs, n_samples=obj_samples)
@@ -206,11 +215,6 @@ def test_model(vaes, vae_params, test_params, config_params):
     for vae in vaes:
         vae.close()
     tf.reset_default_graph()
-    
-def get_batch(data, batch_size):     #ToDo: get random batch
-    batch_xs, _ = data.next_batch(batch_size)
-    batch_xs = batch_xs[:, None, :]
-    return batch_xs
 
 def calculate_stds(vaes, batch_xs, n_epochs, save_step, save_path, n_iterations, vae_part):
     stds = defaultdict(lambda: defaultdict(list))
@@ -258,90 +262,116 @@ def consider_stds(vaes, vae_params, data, n_epochs, batch_size, n_iterations, sa
         axes[idx][1].set_ylabel('log-std')
         axes[idx][1].legend(loc='best')
     plt.show()
+
+def binarized_mnist_fixed_binarization(datasets_dir, validation_size=0):
+    def lines_to_np_array(lines):
+        return np.array([[int(i) for i in line.split()] for line in lines])
+    def shuffle(data):
+        if data.shape[0] > 0:
+            data = data[np.random.choice(data.shape[0], size=data.shape[0], replace=False)]
+        return data
+    with open(os.path.join(datasets_dir, 'BinaryMNIST', 'binarized_mnist_train.amat')) as f:
+        lines = f.readlines()
+    train_data = lines_to_np_array(lines).astype('float32')
+    with open(os.path.join(datasets_dir, 'BinaryMNIST', 'binarized_mnist_valid.amat')) as f:
+        lines = f.readlines()
+    validation_data = lines_to_np_array(lines).astype('float32')
+    with open(os.path.join(datasets_dir, 'BinaryMNIST', 'binarized_mnist_test.amat')) as f:
+        lines = f.readlines()
+    test_data = lines_to_np_array(lines).astype('float32')
     
-
-# def train(vaes, names, X_train, X_test, train_batch_size, test_batch_size, train_obj_samples, test_obj_samples,
-#           training_epochs, display_step, weights_save_step, 
-#           save_weights=True, save_path='saved_weights/', cuda_devices=None):
-#     if cuda_devices is not None:
-#         os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-#         os.environ["CUDA_VISIBLE_DEVICES"] = cuda_devices
-#     test_loss = defaultdict(list)
-#     n_train_samples = X_train.num_examples
-#     n_test_samples = X_test.num_examples
-#     for epoch in tqdm(range(training_epochs)):
-#         epoch_train_loss = defaultdict(list)
-#         total_batch = int(n_train_samples / train_batch_size)
-#         for i in range(total_batch):
-#             batch_xs, _ = X_train.next_batch(train_batch_size)
-#             batch_xs = batch_xs[:, None, :]
-#             for name, vae in zip(names, vaes):
-#                 cost = vae.partial_fit(batch_xs, n_samples=train_obj_samples)
-#                 epoch_train_loss[name].append(cost)
-
-#         if epoch % display_step == 0:
-#             clear_output()
-#             epoch_test_loss = defaultdict(list)
-#             total_batch = int(n_test_samples / test_batch_size)
-#             for i in range(total_batch):
-#                 batch_xs, _ = X_test.next_batch(test_batch_size)
-#                 batch_xs = batch_xs[:, None, :]
-#                 for name, vae in zip(names, vaes):
-#                     epoch_test_loss[name].append(vae.loss(batch_xs, n_samples=test_obj_samples))
-#             for name in names:
-#                 test_loss[name].append(np.mean(epoch_test_loss[name]))
-#                 print('{0}: train cost = {1:.9f}, test cost = {2:.9f}'.format(name, np.mean(epoch_train_loss[name]), 
-#                                                                               test_loss[name][-1]), flush=True)
-#             plt.figure(figsize=(12, 8))
-#             for name in names:
-#                 plt.plot(np.arange(0, epoch+1, display_step), test_loss[name], label=name)
-#             plt.title('Test loss')
-#             plt.xlabel('epoch')
-#             plt.ylabel('loss')
-#             plt.legend(loc='best')
-#             plt.show()
-
-#         if epoch % weights_save_step == 0:
-#             if save_weights == True:
-#                 if not os.path.exists(save_path):
-#                     os.makedirs(save_path)
-#                 for name, vae in zip(names, vaes):
-#                     vae.save_weights(save_path + name + '_{}'.format(epoch+1))
-#     for vae in vaes:
-#         vae.close()
-#     tf.reset_default_graph()
+    train_data = np.concatenate((validation_data, train_data))
+    validation_data = train_data[:validation_size]
+    train_data = train_data[validation_size:]
     
-# def test(vaes, names, X_test, test_batch_size, test_obj_samples,
-#           training_epochs, display_step, weights_save_step, 
-#           save_path='saved_weights/', cuda_devices=None):
-#     if cuda_devices is not None:
-#         os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-#         os.environ["CUDA_VISIBLE_DEVICES"] = cuda_devices
-#     test_loss = defaultdict(list)
-#     n_test_samples = X_test.num_examples
-#     for test_epoch in tqdm(range(0, training_epochs, weights_save_step)):
-#         epoch_test_loss = defaultdict(list)
-#         total_batch = int(n_test_samples / test_batch_size)
-#         for i in range(total_batch):
-#             batch_xs, _ = X_test.next_batch(test_batch_size)
-#             batch_xs = batch_xs[:, None, :]
-#             for name, vae in zip(names, vaes):
-#                 vae.restore_weights(save_path + name + '_{}'.format(test_epoch+1))
-#                 epoch_test_loss[name].append(vae.loss(batch_xs, n_samples=test_obj_samples))
-#         clear_output()
-#         for name in names:
-#             test_loss[name].append(np.mean(epoch_test_loss[name]))
-#             print('{0}: train cost = {1:.9f}, test cost = {2:.9f}'.format(name, np.mean(epoch_test_loss[name]), 
-#                                                                           test_loss[name][-1]), flush=True)
-#         plt.figure(figsize=(12, 8))
-#         for name in names:
-#             plt.plot(np.arange(0, test_epoch+1, weights_save_step), test_loss[name], label=name)
-#         plt.title('Test loss')
-#         plt.xlabel('epoch')
-#         plt.ylabel('loss')
-#         plt.legend(loc='best')
-#         plt.show()
+    train_data, validation_data, test_data = map(shuffle, [train_data, validation_data, test_data])
+    train_data, validation_data, test_data = map(lambda x: 255.0 * x, [train_data, validation_data, test_data])
 
-#     for vae in vaes:
-#         vae.close()
-#     tf.reset_default_graph()
+    options = dict(dtype=dtypes.float32, reshape=False, seed=1234)
+
+    train = mnist.DataSet(train_data, train_data, **options)
+    validation = mnist.DataSet(validation_data, validation_data, **options)
+    test = mnist.DataSet(test_data, test_data, **options)
+
+    return base.Datasets(train=train, validation=validation, test=test)
+
+
+def choose_vaes_and_learning_rates(encoder_distribution, train_obj_samples, all_vaes=True):
+    if encoder_distribution == 'gaussian':
+        vaes = [vae.VAE, vae.LogDerTrickVAE, vae.NVILVAE, vae.MuPropVAE]
+    elif encoder_distribution == 'multinomial':
+        if all_vaes:
+            vaes = [vae.LogDerTrickVAE, vae.NVILVAE, vae.MuPropVAE, vae.GumbelSoftmaxTrickVAE]
+        else:
+            vaes = [vae.GumbelSoftmaxTrickVAE]
+    if train_obj_samples > 1:
+        vaes.append(vae.VIMCOVAE)
+    learning_rates = [1e-4] * len(vaes)
+    if encoder_distribution == 'gaussian':
+        learning_rates[0] = 1e-3
+    return vaes, learning_rates
+
+def setup_input_vaes_and_params(X_train, X_test, binarized, n_z, n_ary, train_obj_samples, 
+                                test_batch_size, test_obj_samples, cuda_devices, save_step, 
+                                save_weights=True, mem_fraction=0.333, all_vaes=True):
+    n_input = X_train.images.shape[1]
+    n_hidden = 200
+    encoder_distribution = 'multinomial'
+    network_architecture = {
+        'encoder': {
+            'h1': (n_input, n_hidden), 
+            'h2': (n_hidden, n_ary*n_hidden), 
+            'out_mean': (n_ary*n_hidden, n_ary*n_z)
+        }, 
+        'decoder': {
+            'h1': (n_ary*n_z, n_hidden), 
+            'h2': (n_hidden, n_hidden),
+            'out_mean': (n_hidden, n_input)
+        }
+    }
+    if encoder_distribution == 'gaussian':
+        network_architecture['encoder']['out_log_sigma_sq'] = (n_ary*n_hidden, n_ary*n_z)
+        
+    train_params = {
+        'data': X_train,
+        'n_samples': X_train.num_examples,
+        'batch_size': 128,
+        'obj_samples': train_obj_samples
+    }
+    test_params = {
+        'data': X_test,
+        'n_samples': X_test.num_examples,
+        'batch_size': test_batch_size, 
+        'obj_samples': test_obj_samples
+    }
+    config_params = {
+        'n_epochs': 3001,
+        'display_step': 100,
+        'save_weights': save_weights,
+        'save_step': save_step,
+        'save_path': '{}VAE-{}B-m{}-nz{}/'.format('Bin-' if binarized else '', n_ary, train_obj_samples, n_z),
+        'cuda_devices': cuda_devices
+    }
+    vae_params = {
+        'common_params': {
+            'n_input': n_input,
+            'n_z': n_z,
+            'n_ary': n_ary,
+            'n_samples': train_params['obj_samples'],
+            'encoder_distribution': encoder_distribution,
+            'network_architecture': network_architecture,
+            'mem_fraction': mem_fraction
+        }
+    }
+
+    vaes, learning_rates = choose_vaes_and_learning_rates(encoder_distribution, train_obj_samples, all_vaes=all_vaes)
+    vae_params['learning_rates'] = learning_rates
+    
+    input_vaes_and_params = {
+        'vaes': vaes, 
+        'vae_params': vae_params,
+        'train_params': train_params,
+        'test_params': test_params,
+        'config_params': config_params
+    }
+    return input_vaes_and_params
