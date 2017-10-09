@@ -5,6 +5,7 @@ import os
 from itertools import chain
 from tqdm import tqdm
 from collections import defaultdict
+import pickle
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -119,6 +120,10 @@ def get_gradient_mean_and_std(vae, batch_xs, n_iterations, gradient_type):
     gradient_std = np.linalg.norm(gradients - gradients.mean(axis=0)) / np.sqrt(n_iterations)
     return gradients.mean(axis=0), gradient_std
 
+def makedirs(path):
+    if not os.path.exists(path):
+        os.makedirs(path)
+        
 def set_up_cuda_devices(cuda_devices):
     if cuda_devices is not None:
         os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
@@ -145,7 +150,7 @@ def run_epoch(vaes, data, n_samples, batch_size, obj_samples, is_train=True,
                 cost = vae.partial_fit(batch_xs, n_samples=obj_samples)
             else:
                 if need_to_restore:
-                    vae.restore_weights(save_path + vae.name() + '_{}'.format(epoch+1))
+                    vae.restore_weights(os.path.join(save_path, vae.name() + '_{}'.format(epoch+1)))
                 cost = vae.loss(batch_xs, n_samples=obj_samples)
             costs[vae.name()].append(cost)
     return dict([(vae.name(), np.mean(costs[vae.name()])) for vae in vaes])
@@ -175,8 +180,7 @@ def plot_loss(vaes, loss, epoch, step, loss_name='Test', start=0):
     plt.show()
     
 def save_vae_weights(vaes, epoch, save_path):
-    if not os.path.exists(save_path):
-        os.makedirs(save_path)
+    makedirs(save_path)
     for vae in vaes:
         vae.save_weights(save_path + vae.name() + '_{}'.format(epoch+1))
         
@@ -212,6 +216,10 @@ def test_model(vaes, vae_params, test_params, config_params):
         clear_output()
         print_costs(vaes, test_costs)
         plot_loss(vaes, test_loss, epoch, config_params['save_step'], start=config_params['save_step'])
+    makedirs(config_params['results_dir'])
+    results_file = config_params['save_path'] + '-testm{}'.format(test_params['obj_samples'])
+    with open(os.path.join(config_params['results_dir'], results_file), 'wb') as f:
+        pickle.dump(test_loss, f)
     for vae in vaes:
         vae.close()
     tf.reset_default_graph()
@@ -313,7 +321,8 @@ def choose_vaes_and_learning_rates(encoder_distribution, train_obj_samples, all_
 
 def setup_input_vaes_and_params(X_train, X_test, binarized, n_z, n_ary, train_obj_samples, 
                                 test_batch_size, test_obj_samples, cuda_devices, save_step, 
-                                save_weights=True, mem_fraction=0.333, all_vaes=True):
+                                save_weights=True, mem_fraction=0.333, all_vaes=True, 
+                                mode='train', results_dir=None):
     n_input = X_train.images.shape[1]
     n_hidden = 200
     encoder_distribution = 'multinomial'
@@ -349,8 +358,9 @@ def setup_input_vaes_and_params(X_train, X_test, binarized, n_z, n_ary, train_ob
         'display_step': 100,
         'save_weights': save_weights,
         'save_step': save_step,
-        'save_path': '{}VAE-{}B-m{}-nz{}/'.format('Bin-' if binarized else '', n_ary, train_obj_samples, n_z),
-        'cuda_devices': cuda_devices
+        'save_path': '{}VAE-{}B-m{}-nz{}'.format('Bin-' if binarized else '', n_ary, train_obj_samples, n_z),
+        'cuda_devices': cuda_devices,
+        'results_dir': results_dir
     }
     vae_params = {
         'common_params': {
@@ -374,4 +384,6 @@ def setup_input_vaes_and_params(X_train, X_test, binarized, n_z, n_ary, train_ob
         'test_params': test_params,
         'config_params': config_params
     }
+    if mode == 'test':
+        input_vaes_and_params.pop('train_params')
     return input_vaes_and_params
