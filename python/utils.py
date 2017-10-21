@@ -32,7 +32,8 @@ def unroll_tensor(x):
     return tf.reshape(x, tf.stack([s[0] * s[1], s[2]])), s
 
 def roll_tensor(x, sh):
-    return tf.reshape(x, tf.stack([sh[0], sh[1], tf.shape(x)[1]]))
+    with tf.name_scope('reshape'):
+        return tf.reshape(x, tf.stack([sh[0], sh[1], tf.shape(x)[1]]))
 
 def xavier_init(fan_in, fan_out, constant=1): 
     low = -constant*np.sqrt(6.0/(fan_in + fan_out)) 
@@ -58,55 +59,59 @@ def gumbel_softmax(logits, temperature, hard=False):
     return y
 
 def init_weights(n_in, n_out, name, bias=None):
-    w = tf.Variable(xavier_init(n_in, n_out), name=name)
-    b = tf.Variable(tf.zeros([n_out]), name=name + '_b') if bias is None else tf.Variable(bias)
+    w = tf.Variable(xavier_init(n_in, n_out), name='weights')
+    b = tf.Variable(tf.zeros([n_out]), name='bias') if bias is None else tf.Variable(bias)
     return w, b
 
-def build_layer(x, w, b, nonlinearity=None):
-    y = tf.matmul(x, w) + b
-    if nonlinearity:
-        y = nonlinearity(y)
+def build_layer(x, w, b, nonlinearity=None, name='layer'):
+    with tf.name_scope(name):
+        y = tf.matmul(x, w) + b
+        if nonlinearity:
+            y = nonlinearity(y)
     return y
 
 def compute_log_density(**params):
-    if params['distribution'] == 'multinomial':
-        x, logits = params['x'], params['logits']
-        if len(params.values()) < 4:
-            logp = -tf.nn.softplus(-logits)
-            logip = -tf.nn.softplus(logits)
-            return tf.reduce_sum(x * logp + (1. - x) * logip, -1)
-        return tf.reduce_sum(-tf.nn.softmax_cross_entropy_with_logits(labels=x, logits=logits), -1)
-    elif params['distribution'] == 'gaussian':
-        x, mu, sigma = params['x'], params['mu'], params['sigma']
-        return -0.5 * tf.reduce_sum(((x - mu) / sigma) ** 2 + tf.log(2 * np.pi) + 2 * tf.log(sigma), 2)
-    raise ValueError('Unsupported distribution!') 
+    with tf.name_scope(params['name']):
+        if params['distribution'] == 'multinomial':
+            x, logits = params['x'], params['logits']
+            if len(params.values()) < 5:
+                logp = -tf.nn.softplus(-logits)
+                logip = -tf.nn.softplus(logits)
+                return tf.reduce_sum(x * logp + (1. - x) * logip, -1)
+            return tf.reduce_sum(-tf.nn.softmax_cross_entropy_with_logits(labels=x, logits=logits), -1)
+        elif params['distribution'] == 'gaussian':
+            x, mu, sigma = params['x'], params['mu'], params['sigma']
+            return -0.5 * tf.reduce_sum(((x - mu) / sigma) ** 2 + tf.log(2 * np.pi) + 2 * tf.log(sigma), 2)
+        raise ValueError('Unsupported distribution!') 
 
 def compute_kl_divergency(**params):
-    if params['distribution'] == 'gaussian':
-        mu, sigma = params['mu'], params['sigma']
-        return -0.5 * tf.reduce_sum(1 + 2 * tf.log(sigma) - mu ** 2 - sigma ** 2, 2)
-    if params['distribution'] == 'multinomial':
-        q_samples = params['x']
-        q_logits = params['logits']
-        prior_probs = params['prior_probs']
-        kl = tf.reduce_sum(q_samples * (tf.nn.log_softmax(q_logits) - tf.log(prior_probs)), [-2, -1])
-        return kl
-    raise ValueError('Unsupported distribution!') 
+    with tf.name_scope(params['name']):
+        if params['distribution'] == 'gaussian':
+            mu, sigma = params['mu'], params['sigma']
+            return -0.5 * tf.reduce_sum(1 + 2 * tf.log(sigma) - mu ** 2 - sigma ** 2, 2)
+        if params['distribution'] == 'multinomial':
+            q_samples = params['x']
+            q_logits = params['logits']
+            prior_probs = params['prior_probs']
+            kl = tf.reduce_sum(q_samples * (tf.nn.log_softmax(q_logits) - tf.log(prior_probs)), [-2, -1])
+            return kl
+        raise ValueError('Unsupported distribution!') 
     
-def compute_multisample_elbo(log_density, kl_divergency, is_vimco=False):
-    multisample_elbo = log_density - kl_divergency
-    multisample_elbo = tf.transpose(multisample_elbo)
-    max_w = tf.reduce_max(multisample_elbo, 0)
-    adjusted_w = tf.exp(multisample_elbo - max_w)
-    n_samples = tf.cast(tf.shape(adjusted_w)[0], tf.float32)
-    if is_vimco is True:
-        vimco_baseline = tf.reduce_mean(adjusted_w, 0) - adjusted_w / n_samples
-        vimco_baseline = max_w + tf.log(1e-5 + vimco_baseline)
-    adjusted_w = tf.reduce_mean((adjusted_w), 0)
-    multisample_elbo = max_w + tf.log(adjusted_w)
-    if is_vimco is True:
-        multisample_elbo = multisample_elbo - tf.stop_gradient(vimco_baseline)
-    return multisample_elbo
+def compute_multisample_elbo(log_density, kl_divergency, is_vimco=False, name='multisample_elbo'):
+    with tf.name_scope(name):
+        multisample_elbo = log_density - kl_divergency
+        multisample_elbo = tf.transpose(multisample_elbo)
+        max_w = tf.reduce_max(multisample_elbo, 0)
+        adjusted_w = tf.exp(multisample_elbo - max_w)
+        n_samples = tf.cast(tf.shape(adjusted_w)[0], tf.float32)
+        if is_vimco is True:
+            vimco_baseline = tf.reduce_mean(adjusted_w, 0) - adjusted_w / n_samples
+            vimco_baseline = max_w + tf.log(1e-5 + vimco_baseline)
+        adjusted_w = tf.reduce_mean((adjusted_w), 0)
+        multisample_elbo = max_w + tf.log(adjusted_w)
+        if is_vimco is True:
+            multisample_elbo = multisample_elbo - tf.stop_gradient(vimco_baseline)
+        return multisample_elbo
 
 def get_gradient_mean_and_std(vae, batch_xs, n_iterations, gradient_type):
     gradients = []
@@ -161,18 +166,20 @@ def run_train_step(vaes, train_params):
 def run_epoch_evaluation(vaes, test_params, **kwargs):
     return run_epoch(vaes, **test_params, is_train=False, **kwargs)
 
-def print_costs(vaes, test_costs, train_costs=None):
+def print_costs(vaes, test_costs, val_costs=None, train_costs=None):
     for vae in vaes:
         name = vae.name()
         train_output = 'train cost = {:.9f}, '.format(train_costs[name]) if train_costs else ''
+        val_output = 'validation cost = {:.9f}, '.format(val_costs[name]) if val_costs else ''
         test_output = 'test cost = {:.9f}'.format(test_costs[name])
-        print(name + ': ' + train_output + test_output, flush=True)
+        print(name + ': ' + train_output + val_output + test_output, flush=True)
         
-def plot_loss(vaes, loss, epoch, step, loss_name='Test', start=0):
+def plot_loss(vaes, test_loss, val_loss, epoch, step, loss_name='Test+Validation', start=0):
     plt.figure(figsize=(12, 8))
     for vae in vaes:
         name = vae.name()
-        plt.plot(np.arange(start, epoch+1, step), loss[name], label=name)
+        plt.plot(np.arange(start, epoch+1, step), test_loss[name], label='Test ' + name)
+        plt.plot(np.arange(start, epoch+1, step), val_loss[name], label='Validation ' + name)
     plt.title('{} loss'.format(loss_name))
     plt.xlabel('epoch')
     plt.ylabel('loss')
@@ -182,21 +189,24 @@ def plot_loss(vaes, loss, epoch, step, loss_name='Test', start=0):
 def save_vae_weights(vaes, epoch, save_path):
     makedirs(save_path)
     for vae in vaes:
-        vae.save_weights(save_path + vae.name() + '_{}'.format(epoch+1))
+        vae.save_weights(os.path.join(save_path, vae.name() + '_{}'.format(epoch+1)))
         
-def train_model(vaes, vae_params, train_params, test_params, config_params):
+def train_model(vaes, vae_params, train_params, val_params, test_params, config_params):
     set_up_cuda_devices(config_params['cuda_devices'])
     vaes = set_up_vaes(vaes, **vae_params)
+    val_loss = defaultdict(list)
     test_loss = defaultdict(list)
     for epoch in tqdm(range(config_params['n_epochs'])):
         train_costs = run_train_step(vaes, train_params)
         if epoch % config_params['display_step'] == 0:
+            val_costs = run_epoch_evaluation(vaes, val_params)
             test_costs = run_epoch_evaluation(vaes, test_params)
             for vae in vaes:
+                val_loss[vae.name()].append(val_costs[vae.name()])
                 test_loss[vae.name()].append(test_costs[vae.name()])
             clear_output()
-            print_costs(vaes, test_costs, train_costs)
-            plot_loss(vaes, test_loss, epoch, config_params['display_step'])
+            print_costs(vaes, test_costs, val_costs, train_costs)
+            plot_loss(vaes, test_loss, val_loss, epoch, config_params['display_step'])
         if epoch % config_params['save_step'] == 0:
             if config_params['save_weights'] == True:
                 save_vae_weights(vaes, epoch, config_params['save_path'])
@@ -204,22 +214,28 @@ def train_model(vaes, vae_params, train_params, test_params, config_params):
         vae.close()
     tf.reset_default_graph()
             
-def test_model(vaes, vae_params, test_params, config_params):
+def test_model(vaes, vae_params, test_params, val_params, config_params):
     set_up_cuda_devices(config_params['cuda_devices'])
     vaes = set_up_vaes(vaes, **vae_params)
     test_loss = defaultdict(list)
+    val_loss = defaultdict(list)
     for epoch in tqdm(range(config_params['save_step'], config_params['n_epochs'], config_params['save_step'])):
         test_costs = run_epoch_evaluation(vaes, test_params, need_to_restore=True, 
                                           save_path=config_params['save_path'], epoch=epoch)
+        val_costs = run_epoch_evaluation(vaes, val_params, need_to_restore=True, 
+                                         save_path=config_params['save_path'], epoch=epoch)
         for vae in vaes:
             test_loss[vae.name()].append(test_costs[vae.name()])
+            val_loss[vae.name()].append(val_costs[vae.name()])
         clear_output()
-        print_costs(vaes, test_costs)
-        plot_loss(vaes, test_loss, epoch, config_params['save_step'], start=config_params['save_step'])
+        print_costs(vaes, test_costs, val_costs)
+        plot_loss(vaes, test_loss, val_loss, epoch, config_params['save_step'], start=config_params['save_step'])
     makedirs(config_params['results_dir'])
     results_file = config_params['save_path'] + '-testm{}'.format(test_params['obj_samples'])
     with open(os.path.join(config_params['results_dir'], results_file), 'wb') as f:
         pickle.dump(test_loss, f)
+    with open(os.path.join(config_params['results_dir'], results_file.replace('test', 'val')), 'wb') as f:
+        pickle.dump(val_loss, f)
     for vae in vaes:
         vae.close()
     tf.reset_default_graph()
@@ -303,15 +319,18 @@ def binarized_mnist_fixed_binarization(datasets_dir, validation_size=0):
 
     return base.Datasets(train=train, validation=validation, test=test)
 
-
 def choose_vaes_and_learning_rates(encoder_distribution, train_obj_samples, all_vaes=True):
     if encoder_distribution == 'gaussian':
-        vaes = [vae.VAE, vae.LogDerTrickVAE, vae.NVILVAE, vae.MuPropVAE]
+        if all_vaes:
+            vaes = [vae.VAE, vae.LogDerTrickVAE, vae.NVILVAE, vae.MuPropVAE]
+        else:
+            vaes = []
     elif encoder_distribution == 'multinomial':
         if all_vaes:
             vaes = [vae.LogDerTrickVAE, vae.NVILVAE, vae.MuPropVAE, vae.GumbelSoftmaxTrickVAE]
         else:
-            vaes = [vae.GumbelSoftmaxTrickVAE]
+#             vaes = [vae.GumbelSoftmaxTrickVAE]
+            vaes = []
     if train_obj_samples > 1:
         vaes.append(vae.VIMCOVAE)
     learning_rates = [1e-4] * len(vaes)
@@ -319,13 +338,12 @@ def choose_vaes_and_learning_rates(encoder_distribution, train_obj_samples, all_
         learning_rates[0] = 1e-3
     return vaes, learning_rates
 
-def setup_input_vaes_and_params(X_train, X_test, binarized, n_z, n_ary, train_obj_samples, 
-                                test_batch_size, test_obj_samples, cuda_devices, save_step, 
-                                save_weights=True, mem_fraction=0.333, all_vaes=True, 
-                                mode='train', results_dir=None):
+def setup_input_vaes_and_params(X_train, X_val, X_test, binarized, n_z, n_ary, encoder_distribution,
+                                train_obj_samples, val_batch_size, val_obj_samples, test_batch_size, 
+                                test_obj_samples, cuda_devices, save_step, n_epochs=3001, save_weights=True, 
+                                mem_fraction=0.333, all_vaes=True, mode='train', results_dir=None):
     n_input = X_train.images.shape[1]
     n_hidden = 200
-    encoder_distribution = 'multinomial'
     network_architecture = {
         'encoder': {
             'h1': (n_input, n_hidden), 
@@ -347,6 +365,12 @@ def setup_input_vaes_and_params(X_train, X_test, binarized, n_z, n_ary, train_ob
         'batch_size': 128,
         'obj_samples': train_obj_samples
     }
+    val_params = {
+        'data': X_val,
+        'n_samples': X_val.num_examples,
+        'batch_size': val_batch_size,
+        'obj_samples': val_obj_samples
+    }
     test_params = {
         'data': X_test,
         'n_samples': X_test.num_examples,
@@ -354,7 +378,7 @@ def setup_input_vaes_and_params(X_train, X_test, binarized, n_z, n_ary, train_ob
         'obj_samples': test_obj_samples
     }
     config_params = {
-        'n_epochs': 3001,
+        'n_epochs': n_epochs,
         'display_step': 100,
         'save_weights': save_weights,
         'save_step': save_step,
@@ -381,6 +405,7 @@ def setup_input_vaes_and_params(X_train, X_test, binarized, n_z, n_ary, train_ob
         'vaes': vaes, 
         'vae_params': vae_params,
         'train_params': train_params,
+        'val_params': val_params,
         'test_params': test_params,
         'config_params': config_params
     }
