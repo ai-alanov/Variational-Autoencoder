@@ -21,12 +21,13 @@ class VAE(object):
         self.n_samples = tf.placeholder(tf.int32, shape=[])
         self.train_bias = train_bias
         
-        self.x = tf.placeholder(tf.float32, [None, 1, n_input])
-        self.batch_size = tf.shape(self.x)[0]
-        self.x_binarized = tf.cast(tf.random_uniform(tf.shape(self.x)) <= self.x, tf.float32)
-        self.x_binarized = tf.tile(self.x_binarized, [1, self.n_samples, 1])
-
-        self.prior_probs = (1./self.n_ary)*tf.ones([self.batch_size, self.n_samples, self.n_ary*self.n_z])
+        with tf.name_scope('input'):
+            self.x = tf.placeholder(tf.float32, [None, 1, n_input])
+            self.batch_size = tf.shape(self.x)[0]
+            self.x_binarized = tf.cast(tf.random_uniform(tf.shape(self.x)) <= self.x, tf.float32)
+            self.x_binarized = tf.tile(self.x_binarized, [1, self.n_samples, 1])
+        with tf.name_scope('prior_probs'):
+            self.prior_probs = (1./self.n_ary)*tf.ones([self.batch_size, self.n_samples, self.n_ary*self.n_z])
 
         self.__create_network()
 
@@ -38,6 +39,8 @@ class VAE(object):
         gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=mem_fraction)
         self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
         self.sess.run(self.init)
+        
+        self.writer = tf.summary.FileWriter('tensorboard', self.sess.graph)
         
     def __str__(self):
         return 'ReparamTrickVAE'
@@ -62,33 +65,45 @@ class VAE(object):
         x = self.x_binarized
         x, sh = unroll_tensor(x)
         
-        self.encoder_layer1 = build_layer(x, *weights['encoder']['h1'], nonlinearity=self.nonlinearity)
-        self.encoder_layer2 = build_layer(self.encoder_layer1, *weights['encoder']['h2'], 
-                                          nonlinearity=self.nonlinearity)
-        self.z_mean = build_layer(self.encoder_layer2, *weights['encoder']['out_mean'])
-        self.z_mean = roll_tensor(self.z_mean, sh)
-        
-        if self.encoder_distribution == 'gaussian':
-            self.z_log_sigma_sq = build_layer(self.encoder_layer2, *weights['encoder']['out_log_sigma_sq'])
-            self.z_log_sigma_sq = roll_tensor(self.z_log_sigma_sq, sh)
-            epsilon = tf.random_normal(tf.shape(self.z_mean))
-            self.z = self.z_mean + tf.exp(0.5 * self.z_log_sigma_sq) * epsilon
-        elif self.encoder_distribution == 'multinomial':
-            self.z_mean = tf.reshape(self.z_mean, [-1, self.n_ary])
-            self.z = tf.one_hot(tf.squeeze(tf.multinomial(self.z_mean, 1), 1), self.n_ary, 1.0, 0.0)
-            self.z = tf.reshape(self.z, [self.batch_size, self.n_samples, self.n_ary*self.n_z])
-            
-            self.z_probs = tf.reshape(tf.nn.softmax(self.z_mean), 
-                                      [self.batch_size, self.n_samples, self.n_ary*self.n_z])
-            self.z_mean = tf.reshape(self.z_mean, [self.batch_size, self.n_samples, self.n_ary*self.n_z])
+        with tf.name_scope('encoder'):
+            self.encoder_layer1 = build_layer(x, *weights['encoder']['h1'], nonlinearity=self.nonlinearity, 
+                                              name='encoder_h1')
+            self.encoder_layer2 = build_layer(self.encoder_layer1, *weights['encoder']['h2'], 
+                                              nonlinearity=self.nonlinearity, name='encoder_h2')
+        with tf.name_scope('stochastic_layer'):
+            self.z_mean = build_layer(self.encoder_layer2, *weights['encoder']['out_mean'], name='encoder_out_mean')
+            self.z_mean = roll_tensor(self.z_mean, sh)
+
+            if self.encoder_distribution == 'gaussian':
+                self.z_log_sigma_sq = build_layer(self.encoder_layer2, *weights['encoder']['out_log_sigma_sq'], 
+                                                  name='encoder_out_log_sigma_sq')
+
+                self.z_log_sigma_sq = roll_tensor(self.z_log_sigma_sq, sh)
+                with tf.name_scope('stochastic_node'):
+                    epsilon = tf.random_normal(tf.shape(self.z_mean))
+                    self.z = self.z_mean + tf.exp(0.5 * self.z_log_sigma_sq) * epsilon
+            elif self.encoder_distribution == 'multinomial':
+                with tf.name_scope('reshape'):
+                    self.z_mean = tf.reshape(self.z_mean, [-1, self.n_ary])
+                with tf.name_scope('stochastic_node'):
+                    self.z = tf.one_hot(tf.squeeze(tf.multinomial(self.z_mean, 1), 1), self.n_ary, 1.0, 0.0)
+                    self.z = tf.reshape(self.z, [self.batch_size, self.n_samples, self.n_ary*self.n_z])
+                with tf.name_scope('z_probs'):
+                    self.z_probs = tf.reshape(tf.nn.softmax(self.z_mean), 
+                                              [self.batch_size, self.n_samples, self.n_ary*self.n_z])
+                with tf.name_scope('reshape'):
+                    self.z_mean = tf.reshape(self.z_mean, [self.batch_size, self.n_samples, self.n_ary*self.n_z])
     
     def _create_decoder_part(self, z):
         weights = self.weights
-        z, sh = unroll_tensor(z)
-        decoder_layer1 = build_layer(z, *weights['decoder']['h1'], nonlinearity=self.nonlinearity)
-        decoder_layer2 = build_layer(decoder_layer1, *weights['decoder']['h2'], nonlinearity=self.nonlinearity)
-        x_reconst = build_layer(decoder_layer2, *weights['decoder']['out_mean'])
-        x_reconst = roll_tensor(x_reconst, sh)
+        with tf.name_scope('decoder'):
+            z, sh = unroll_tensor(z)
+            decoder_layer1 = build_layer(z, *weights['decoder']['h1'], nonlinearity=self.nonlinearity, 
+                                         name='decoder_h1')
+            decoder_layer2 = build_layer(decoder_layer1, *weights['decoder']['h2'], nonlinearity=self.nonlinearity,
+                                         name='decoder_h2')
+            x_reconst = build_layer(decoder_layer2, *weights['decoder']['out_mean'], name='decoder_out_mean')
+            x_reconst = roll_tensor(x_reconst, sh)
         return x_reconst
     
     def __create_loss_optimizer(self):
@@ -96,51 +111,61 @@ class VAE(object):
         self._create_optimizer()
     
     def _create_loss(self):
-        if self.decoder_distribution == 'multinomial':
-            self.decoder_log_density = compute_log_density(x=self.x_binarized, logits=self.x_reconst, 
-                                                           distribution=self.decoder_distribution)
-        elif self.decoder_distribution == 'gaussian':
-            self.decoder_log_density = compute_log_density(x=self.x_binarized, mu=tf.nn.softmax(self.x_reconst),
-                                                           sigma=1., distribution=self.decoder_distribution)
-        if self.encoder_distribution == 'multinomial':
-            z = tf.reshape(self.z, [self.batch_size, self.n_samples, self.n_z, self.n_ary])
-            z_shape = tf.shape(z)
-            z_mean, z_probs, prior_probs = tuple(map(lambda x: tf.reshape(x, z_shape), 
-                                                     [self.z_mean, self.z_probs, self.prior_probs]))
-            self.encoder_log_density = compute_log_density(x=z, logits=z_mean, probs=z_probs,
+        with tf.name_scope('loss'):
+            if self.decoder_distribution == 'multinomial':
+                self.decoder_log_density = compute_log_density(x=self.x_binarized, logits=self.x_reconst, 
+                                                               distribution=self.decoder_distribution,
+                                                               name='decoder_log_density')
+            elif self.decoder_distribution == 'gaussian':
+                self.decoder_log_density = compute_log_density(x=self.x_binarized, mu=tf.nn.softmax(self.x_reconst),
+                                                               sigma=1., distribution=self.decoder_distribution,
+                                                               name='decoder_log_density')
+            if self.encoder_distribution == 'multinomial':
+                with tf.name_scope('reshape'):
+                    z = tf.reshape(self.z, [self.batch_size, self.n_samples, self.n_z, self.n_ary])
+                    z_shape = tf.shape(z)
+                    z_mean, z_probs, prior_probs = tuple(map(lambda x: tf.reshape(x, z_shape), 
+                                                             [self.z_mean, self.z_probs, self.prior_probs]))
+                self.encoder_log_density = compute_log_density(x=z, logits=z_mean, probs=z_probs,
+                                                               prior_probs=prior_probs, 
+                                                               distribution=self.encoder_distribution, 
+                                                               name='encoder_log_density')
+                self.kl_divergency = compute_kl_divergency(x=z, logits=z_mean, probs=z_probs,
                                                            prior_probs=prior_probs, 
-                                                           distribution=self.encoder_distribution)
-            self.kl_divergency = compute_kl_divergency(x=z, logits=z_mean, probs=z_probs,
-                                                       prior_probs=prior_probs, 
-                                                       distribution=self.encoder_distribution)
-        elif self.encoder_distribution == 'gaussian':
-            self.encoder_log_density = compute_log_density(x=self.z, mu=self.z_mean, 
+                                                           distribution=self.encoder_distribution,
+                                                           name='kl_divergency')
+            elif self.encoder_distribution == 'gaussian':
+                self.encoder_log_density = compute_log_density(x=self.z, mu=self.z_mean, 
+                                                               sigma=tf.exp(0.5 * self.z_log_sigma_sq), 
+                                                               distribution=self.encoder_distribution,
+                                                               name='encoder_log_density')
+                self.kl_divergency = compute_kl_divergency(x=self.z, mu=self.z_mean, 
                                                            sigma=tf.exp(0.5 * self.z_log_sigma_sq), 
-                                                           distribution=self.encoder_distribution)
-            self.kl_divergency = compute_kl_divergency(x=self.z, mu=self.z_mean, 
-                                                       sigma=tf.exp(0.5 * self.z_log_sigma_sq), 
-                                                       distribution=self.encoder_distribution)
-        self.multisample_elbo = -compute_multisample_elbo(self.decoder_log_density, self.kl_divergency)
-        
-        self.cost_for_decoder_weights = tf.reduce_mean(self.multisample_elbo)
-        self.cost_for_encoder_weights = tf.reduce_mean(self.multisample_elbo)
-        
-        self.cost_for_display = tf.reduce_mean(self.multisample_elbo)
+                                                           distribution=self.encoder_distribution,
+                                                           name='kl_divergency')
+            self.multisample_elbo = -compute_multisample_elbo(self.decoder_log_density, self.kl_divergency)
+
+            self.cost_for_decoder_weights = tf.reduce_mean(self.multisample_elbo)
+            self.cost_for_encoder_weights = tf.reduce_mean(self.multisample_elbo)
+
+            self.cost_for_display = tf.reduce_mean(self.multisample_elbo)
         
     def _create_optimizer(self):
-        self.decoder_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate, epsilon=1e-4)
-        self.decoder_minimizer = self.decoder_optimizer.minimize(self.cost_for_decoder_weights, 
-                                                                 var_list=self.decoder_weights)
-        
-        self.encoder_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate, epsilon=1e-4)
-        self.encoder_minimizer = self.encoder_optimizer.minimize(self.cost_for_encoder_weights, 
-                                                                 var_list=self.encoder_weights)
-        
-        self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate, epsilon=1e-4)
-        self.decoder_gradients = self.optimizer.compute_gradients(self.cost_for_decoder_weights, 
-                                                                  var_list=self.decoder_weights)
-        self.encoder_gradients = self.optimizer.compute_gradients(self.cost_for_encoder_weights, 
-                                                                  var_list=self.encoder_weights)
+        with tf.name_scope('optimizer'):
+            with tf.name_scope('decoder_optimizer'):
+                self.decoder_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate, epsilon=1e-4)
+                self.decoder_minimizer = self.decoder_optimizer.minimize(self.cost_for_decoder_weights, 
+                                                                         var_list=self.decoder_weights)
+            with tf.name_scope('encoder_optimizer'):
+                self.encoder_optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate, epsilon=1e-4)
+                self.encoder_minimizer = self.encoder_optimizer.minimize(self.cost_for_encoder_weights, 
+                                                                         var_list=self.encoder_weights)
+            with tf.name_scope('gradients'):
+                self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate, epsilon=1e-4)
+                self.decoder_gradients = self.optimizer.compute_gradients(self.cost_for_decoder_weights, 
+                                                                          var_list=self.decoder_weights)
+                self.encoder_gradients = self.optimizer.compute_gradients(self.cost_for_encoder_weights, 
+                                                                          var_list=self.encoder_weights)
         
     def partial_fit(self, X, learning_rate_decay=1.0, n_samples=None):
         learning_rate = learning_rate_decay * self.learning_rate_value
