@@ -2,8 +2,10 @@ import numpy as np
 import tensorflow as tf
 import collections
 import os
+import glob
 from itertools import chain
 from tqdm import tqdm
+from datetime import datetime
 from collections import defaultdict
 import pickle
 
@@ -205,10 +207,16 @@ def plot_loss(vaes, test_loss, val_loss, epoch, step, loss_name='Test+Validation
     plt.legend(loc='best')
     plt.show()
     
-def save_vae_weights(vaes, sess, epoch, save_path):
-    makedirs(save_path)
+def save_vae_weights(vaes, sess, epoch, save_dir):
     for vae in vaes:
-        vae.save_weights(sess, os.path.join(save_path, vae.name() + '_{}'.format(epoch+1)))
+        save_path = os.path.join(save_dir, vae.name(), vae.dataset_name(), vae.parameters())
+        if epoch == 0:
+            now = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
+        else:
+            now = os.path.basename(sorted(glob.glob(os.path.join(save_path, '*')))[-1])
+        save_path = os.path.join(save_path, now)
+        makedirs(save_path)
+        vae.save_weights(sess, os.path.join(save_path, '{}'.format(epoch+1)))
         
 def train_model(vaes, vae_params, train_params, val_params, test_params, config_params):
     set_up_cuda_devices(config_params['cuda_devices'])
@@ -323,7 +331,6 @@ def binarized_mnist_fixed_binarization(datasets_dir, validation_size=0):
     with open(os.path.join(datasets_dir, 'BinaryMNIST', 'binarized_mnist_test.amat')) as f:
         lines = f.readlines()
     test_data = lines_to_np_array(lines).astype('float32')
-    
     train_data = np.concatenate((validation_data, train_data))
     validation_data = train_data[:validation_size]
     train_data = train_data[validation_size:]
@@ -339,7 +346,7 @@ def binarized_mnist_fixed_binarization(datasets_dir, validation_size=0):
 
     return base.Datasets(train=train, validation=validation, test=test)
 
-def choose_vaes_and_learning_rates(encoder_distribution, train_obj_samples, all_vaes=True):
+def choose_vaes_and_learning_rates(encoder_distribution, train_obj_samples, learning_rate, all_vaes=True):
     if encoder_distribution == 'gaussian':
         if all_vaes:
             vaes = [vae.VAE, vae.LogDerTrickVAE, vae.NVILVAE, vae.MuPropVAE]
@@ -349,19 +356,20 @@ def choose_vaes_and_learning_rates(encoder_distribution, train_obj_samples, all_
         if all_vaes:
             vaes = [vae.LogDerTrickVAE, vae.NVILVAE, vae.MuPropVAE, vae.GumbelSoftmaxTrickVAE]
         else:
-            vaes = [vae.LogDerTrickVAE, vae.NVILVAE, vae.MuPropVAE, vae.GumbelSoftmaxTrickVAE]
+            vaes = [vae.GumbelSoftmaxTrickVAE]
 #             vaes = []
     if train_obj_samples > 1:
         vaes.append(vae.VIMCOVAE)
-    learning_rates = [1e-4] * len(vaes)
-    if encoder_distribution == 'gaussian':
-        learning_rates[0] = 1e-3
+    learning_rates = [learning_rate] * len(vaes)
+#     if encoder_distribution == 'gaussian':
+#         learning_rates[0] = 1e-3
     return vaes, learning_rates
 
-def setup_input_vaes_and_params(X_train, X_val, X_test, binarized, n_z, n_ary, encoder_distribution,
-                                train_obj_samples, val_batch_size, val_obj_samples, test_batch_size, 
-                                test_obj_samples, cuda_devices, save_step, n_epochs=3001, save_weights=True, 
-                                mem_fraction=0.333, all_vaes=True, mode='train', results_dir=None):
+def setup_input_vaes_and_params(X_train, X_val, X_test, dataset, n_z, n_ary, encoder_distribution, learning_rate,
+                                train_batch_size, train_obj_samples, val_batch_size, val_obj_samples, 
+                                test_batch_size, test_obj_samples, cuda_devices, save_step, n_epochs=3001, 
+                                save_weights=True, mem_fraction=0.333, all_vaes=True, mode='train', 
+                                results_dir=None):
     n_input = X_train.images.shape[1]
     n_hidden = 200
     network_architecture = {
@@ -382,7 +390,7 @@ def setup_input_vaes_and_params(X_train, X_val, X_test, binarized, n_z, n_ary, e
     train_params = {
         'data': X_train,
         'n_samples': X_train.num_examples,
-        'batch_size': 128,
+        'batch_size': train_batch_size,
         'obj_samples': train_obj_samples
     }
     val_params = {
@@ -402,13 +410,14 @@ def setup_input_vaes_and_params(X_train, X_val, X_test, binarized, n_z, n_ary, e
         'display_step': 100,
         'save_weights': save_weights,
         'save_step': save_step,
-        'save_path': '{}VAE-{}B-m{}-nz{}'.format('Bin-' if binarized else '', n_ary, train_obj_samples, n_z),
+        'save_path': 'weights',
         'cuda_devices': cuda_devices,
         'mem_fraction': mem_fraction,
         'results_dir': results_dir
     }
     vae_params = {
         'common_params': {
+            'dataset': dataset,
             'n_input': n_input,
             'n_z': n_z,
             'n_ary': n_ary,
@@ -418,7 +427,8 @@ def setup_input_vaes_and_params(X_train, X_val, X_test, binarized, n_z, n_ary, e
         }
     }
 
-    vaes, learning_rates = choose_vaes_and_learning_rates(encoder_distribution, train_obj_samples, all_vaes=all_vaes)
+    vaes, learning_rates = choose_vaes_and_learning_rates(encoder_distribution, train_obj_samples, 
+                                                          learning_rate, all_vaes=all_vaes)
     vae_params['learning_rates'] = learning_rates
     
     input_vaes_and_params = {
