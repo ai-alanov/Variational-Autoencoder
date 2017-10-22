@@ -5,9 +5,9 @@ from utils import *
 from itertools import chain
 
 class VAE(object):
-    def __init__(self, n_input, n_z, network_architecture, learning_rate, 
+    def __init__(self, x, n_input, n_z, network_architecture, learning_rate, 
                  encoder_distribution='multinomial', decoder_distribution='multinomial', 
-                 nonlinearity=tf.nn.softplus, n_ary=None, n_samples=1, train_bias=None, mem_fraction=0.333):
+                 nonlinearity=tf.nn.softplus, n_ary=None, n_samples=1, train_bias=None):
         self.n_input = n_input
         self.n_z = n_z
         self.network_architecture = network_architecture
@@ -22,9 +22,8 @@ class VAE(object):
         self.train_bias = train_bias
         
         with tf.name_scope('input'):
-            self.x = tf.placeholder(tf.float32, [None, 1, n_input])
-            self.batch_size = tf.shape(self.x)[0]
-            self.x_binarized = tf.cast(tf.random_uniform(tf.shape(self.x)) <= self.x, tf.float32)
+            self.x_binarized = x
+            self.batch_size = tf.shape(self.x_binarized)[0]
             self.x_binarized = tf.tile(self.x_binarized, [1, self.n_samples, 1])
         with tf.name_scope('prior_probs'):
             self.prior_probs = (1./self.n_ary)*tf.ones([self.batch_size, self.n_samples, self.n_ary*self.n_z])
@@ -32,15 +31,9 @@ class VAE(object):
         self.__create_network()
 
         self.__create_loss_optimizer()
-
-        self.init = tf.global_variables_initializer()
+        
+        self.init_weights = tf.variables_initializer(self.flat_weights.values())
         self.saver = tf.train.Saver(self.flat_weights, max_to_keep=None)
-        
-        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=mem_fraction)
-        self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
-        self.sess.run(self.init)
-        
-        self.writer = tf.summary.FileWriter('tensorboard', self.sess.graph)
         
     def __str__(self):
         return 'ReparamTrickVAE'
@@ -166,16 +159,20 @@ class VAE(object):
                                                                           var_list=self.decoder_weights)
                 self.encoder_gradients = self.optimizer.compute_gradients(self.cost_for_encoder_weights, 
                                                                           var_list=self.encoder_weights)
+    
+    def initialize_weights(self, sess):
+        sess.run(self.init_weights)
         
-    def partial_fit(self, X, learning_rate_decay=1.0, n_samples=None):
+    def partial_fit(self, learning_rate_decay=1.0, n_samples=None):
         learning_rate = learning_rate_decay * self.learning_rate_value
         n_samples = self.n_samples_value if n_samples is None else n_samples
-        self.sess.run(self.decoder_minimizer, feed_dict={self.x: X, self.learning_rate: learning_rate, 
-                                                         self.n_samples: n_samples})
-        _, cost = self.sess.run([self.encoder_minimizer, self.cost_for_display], 
-                                feed_dict={self.x: X, self.learning_rate: learning_rate, 
-                                           self.n_samples: n_samples})
-        return cost
+        dict_of_tensors = {
+            'decoder_minimizer': self.decoder_minimizer, 
+            'encoder_minimizer': self.encoder_minimizer, 
+            'cost_for_display': self.cost_for_display
+        }
+        feed_dict={self.learning_rate: learning_rate, self.n_samples: n_samples}
+        return dict_of_tensors, feed_dict
     
     def name(self):
         return str(self)
@@ -216,15 +213,19 @@ class VAE(object):
     def reconstruct(self, X):
         return self.sess.run(self.x_reconst, feed_dict={self.x: X})
     
-    def loss(self, X, n_samples=None):
+    def loss(self, n_samples=None):
         n_samples = self.n_samples_value if n_samples is None else n_samples
-        return self.sess.run(self.cost_for_display, feed_dict={self.x: X, self.n_samples: n_samples})
+        dict_of_tensors = {
+            'cost_for_display': self.cost_for_display
+        }
+        feed_dict={self.n_samples: n_samples}
+        return dict_of_tensors, feed_dict
     
-    def save_weights(self, save_path):
-        self.saver.save(self.sess, save_path)
+    def save_weights(self, sess, save_path):
+        self.saver.save(sess, save_path)
         
-    def restore_weights(self, restore_path):
-        self.saver.restore(self.sess, restore_path)
+    def restore_weights(self, sess, restore_path):
+        self.saver.restore(sess, restore_path)
     
     def close(self):
         self.sess.close()
@@ -236,9 +237,6 @@ class LogDerTrickVAE(VAE):
         self._create_network()
         
         self._create_loss_optimizer()
-        
-        self.init = tf.global_variables_initializer()
-        self.sess.run(self.init)
         
     def __str__(self):
         return 'LogDerTrickVAE'
@@ -267,9 +265,6 @@ class VIMCOVAE(VAE):
         
         self._create_loss_optimizer()
         
-        self.init = tf.global_variables_initializer()
-        self.sess.run(self.init)
-        
     def __str__(self):
         return 'VIMCOVAE'
         
@@ -296,9 +291,6 @@ class NVILVAE(VAE):
         self._create_network()
         
         self._create_loss_optimizer()
-        
-        self.init = tf.global_variables_initializer()
-        self.sess.run(self.init)
         
     def __str__(self):
         return 'NVILVAE'
@@ -333,21 +325,18 @@ class NVILVAE(VAE):
         self.baseline_minimizer = self.decoder_optimizer.minimize(self.cost_for_baseline, 
                                                                  var_list=self.baseline_weights)
         
-    def partial_fit(self, X, learning_rate_decay=1.0, n_samples=None):
-        cost = super().partial_fit(X, learning_rate_decay, n_samples)
-        learning_rate = learning_rate_decay * self.learning_rate_value
-        n_samples = self.n_samples_value if n_samples is None else n_samples
-        self.sess.run(self.baseline_minimizer, feed_dict={self.x: X, self.learning_rate: learning_rate,
-                                                          self.n_samples: n_samples})
-        return cost
+    def partial_fit(self, learning_rate_decay=1.0, n_samples=None):
+        dict_of_tensors, feed_dict = super().partial_fit(learning_rate_decay, n_samples)
+        dict_of_tensors['baseline_minimizer'] = self.baseline_minimizer
+        return dict_of_tensors, feed_dict
         
-    def save_weights(self, save_path):
-        super().save_weights(save_path)
-        self.baseline_saver.save(self.sess, save_path + '_baseline')
+    def save_weights(self, sess, save_path):
+        super().save_weights(sess, save_path)
+        self.baseline_saver.save(sess, save_path + '_baseline')
         
-    def restore_weights(self, restore_path):
-        super().restore_weights(restore_path)
-        self.baseline_saver.restore(self.sess, restore_path + '_baseline')
+    def restore_weights(self, sess, restore_path):
+        super().restore_weights(sess, restore_path)
+        self.baseline_saver.restore(sess, restore_path + '_baseline')
         
 class MuPropVAE(VAE):
     def __init__(self, *args, **kwargs):
@@ -356,9 +345,6 @@ class MuPropVAE(VAE):
         self._create_network()
         
         self._create_loss_optimizer()
-        
-        self.init = tf.global_variables_initializer()
-        self.sess.run(self.init)
         
     def __str__(self):
         return 'MuPropVAE'
@@ -421,9 +407,6 @@ class GumbelSoftmaxTrickVAE(VAE):
         self._create_network()
         
         self._create_loss_optimizer()
-        
-        self.init = tf.global_variables_initializer()
-        self.sess.run(self.init)
         
     def __str__(self):
         return 'GumbelSoftmaxTrickVAE'
