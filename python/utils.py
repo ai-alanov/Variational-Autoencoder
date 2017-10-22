@@ -71,6 +71,8 @@ def build_layer(x, w, b, nonlinearity=None, name='layer'):
     return y
 
 def compute_log_density(**params):
+    if 'name' not in params:
+        params['name'] = 'compute_log_density'
     with tf.name_scope(params['name']):
         if params['distribution'] == 'multinomial':
             x, logits = params['x'], params['logits']
@@ -135,36 +137,53 @@ def set_up_cuda_devices(cuda_devices):
         os.environ["CUDA_VISIBLE_DEVICES"] = cuda_devices
         
 def set_up_vaes(vaes, common_params, learning_rates):
+    input_x = tf.placeholder(tf.float32, [None, 1, common_params['n_input']])
+    input_x = tf.cast(tf.random_uniform(tf.shape(input_x)) <= input_x, tf.float32)
+    common_params['x'] = input_x
     vaes = [vae(**common_params, learning_rate=learning_rate) 
             for vae, learning_rate in zip(vaes, learning_rates)]
-    return vaes
+    return vaes, input_x
+
+def set_up_session(vaes, config_params):
+    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=config_params['mem_fraction'])
+    sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
+    sess.run(tf.global_variables_initializer())
+#     for vae in vaes:
+#         vae.initialize_weights(sess)
+    return sess
     
 def get_batch(data, batch_size):     #ToDo: get random batch
     batch_xs, _ = data.next_batch(batch_size)
     batch_xs = batch_xs[:, None, :]
     return batch_xs
 
-def run_epoch(vaes, data, n_samples, batch_size, obj_samples, is_train=True,
-              need_to_restore=False, save_path=None, epoch=None):
+def run_epoch(vaes, sess, input_x, data, n_samples, batch_size, obj_samples, 
+              is_train=True, need_to_restore=False, save_path=None, epoch=None):
     costs = defaultdict(list)
     n_batches = int(n_samples / batch_size)
     for _ in range(n_batches):
         batch_xs = get_batch(data, batch_size)
+        dict_of_tensors = {}
+        feed_dict = {input_x: batch_xs}
         for vae in vaes:
             if is_train:
-                cost = vae.partial_fit(batch_xs, n_samples=obj_samples)
+                vae_dict_of_tensors, vae_feed_dict = vae.partial_fit(n_samples=obj_samples)
             else:
                 if need_to_restore:
-                    vae.restore_weights(os.path.join(save_path, vae.name() + '_{}'.format(epoch+1)))
-                cost = vae.loss(batch_xs, n_samples=obj_samples)
-            costs[vae.name()].append(cost)
+                    vae.restore_weights(sess, os.path.join(save_path, vae.name() + '_{}'.format(epoch+1)))
+                vae_dict_of_tensors, vae_feed_dict = vae.loss(n_samples=obj_samples)
+            dict_of_tensors[vae.name()] = vae_dict_of_tensors
+            feed_dict.update(vae_feed_dict)
+        dict_of_results = sess.run(dict_of_tensors, feed_dict)
+        for vae in vaes:
+            costs[vae.name()].append(dict_of_results[vae.name()]['cost_for_display'])
     return dict([(vae.name(), np.mean(costs[vae.name()])) for vae in vaes])
 
-def run_train_step(vaes, train_params):
-    return run_epoch(vaes, **train_params)
+def run_train_step(vaes, sess, input_x, train_params):
+    return run_epoch(vaes, sess, input_x, **train_params)
 
-def run_epoch_evaluation(vaes, test_params, **kwargs):
-    return run_epoch(vaes, **test_params, is_train=False, **kwargs)
+def run_epoch_evaluation(vaes, sess, input_x, test_params, **kwargs):
+    return run_epoch(vaes, sess, input_x, **test_params, is_train=False, **kwargs)
 
 def print_costs(vaes, test_costs, val_costs=None, train_costs=None):
     for vae in vaes:
@@ -186,21 +205,22 @@ def plot_loss(vaes, test_loss, val_loss, epoch, step, loss_name='Test+Validation
     plt.legend(loc='best')
     plt.show()
     
-def save_vae_weights(vaes, epoch, save_path):
+def save_vae_weights(vaes, sess, epoch, save_path):
     makedirs(save_path)
     for vae in vaes:
-        vae.save_weights(os.path.join(save_path, vae.name() + '_{}'.format(epoch+1)))
+        vae.save_weights(sess, os.path.join(save_path, vae.name() + '_{}'.format(epoch+1)))
         
 def train_model(vaes, vae_params, train_params, val_params, test_params, config_params):
     set_up_cuda_devices(config_params['cuda_devices'])
-    vaes = set_up_vaes(vaes, **vae_params)
+    vaes, input_x = set_up_vaes(vaes, **vae_params)
+    sess = set_up_session(vaes, config_params)
     val_loss = defaultdict(list)
     test_loss = defaultdict(list)
     for epoch in tqdm(range(config_params['n_epochs'])):
-        train_costs = run_train_step(vaes, train_params)
+        train_costs = run_train_step(vaes, sess, input_x, train_params)
         if epoch % config_params['display_step'] == 0:
-            val_costs = run_epoch_evaluation(vaes, val_params)
-            test_costs = run_epoch_evaluation(vaes, test_params)
+            val_costs = run_epoch_evaluation(vaes, sess, input_x, val_params)
+            test_costs = run_epoch_evaluation(vaes, sess, input_x, test_params)
             for vae in vaes:
                 val_loss[vae.name()].append(val_costs[vae.name()])
                 test_loss[vae.name()].append(test_costs[vae.name()])
@@ -209,7 +229,7 @@ def train_model(vaes, vae_params, train_params, val_params, test_params, config_
             plot_loss(vaes, test_loss, val_loss, epoch, config_params['display_step'])
         if epoch % config_params['save_step'] == 0:
             if config_params['save_weights'] == True:
-                save_vae_weights(vaes, epoch, config_params['save_path'])
+                save_vae_weights(vaes, sess, epoch, config_params['save_path'])
     for vae in vaes:
         vae.close()
     tf.reset_default_graph()
@@ -324,13 +344,13 @@ def choose_vaes_and_learning_rates(encoder_distribution, train_obj_samples, all_
         if all_vaes:
             vaes = [vae.VAE, vae.LogDerTrickVAE, vae.NVILVAE, vae.MuPropVAE]
         else:
-            vaes = []
+            vaes = [vae.VAE, vae.LogDerTrickVAE, vae.NVILVAE, vae.MuPropVAE]
     elif encoder_distribution == 'multinomial':
         if all_vaes:
             vaes = [vae.LogDerTrickVAE, vae.NVILVAE, vae.MuPropVAE, vae.GumbelSoftmaxTrickVAE]
         else:
-#             vaes = [vae.GumbelSoftmaxTrickVAE]
-            vaes = []
+            vaes = [vae.LogDerTrickVAE, vae.NVILVAE, vae.MuPropVAE, vae.GumbelSoftmaxTrickVAE]
+#             vaes = []
     if train_obj_samples > 1:
         vaes.append(vae.VIMCOVAE)
     learning_rates = [1e-4] * len(vaes)
@@ -384,6 +404,7 @@ def setup_input_vaes_and_params(X_train, X_val, X_test, binarized, n_z, n_ary, e
         'save_step': save_step,
         'save_path': '{}VAE-{}B-m{}-nz{}'.format('Bin-' if binarized else '', n_ary, train_obj_samples, n_z),
         'cuda_devices': cuda_devices,
+        'mem_fraction': mem_fraction,
         'results_dir': results_dir
     }
     vae_params = {
@@ -393,8 +414,7 @@ def setup_input_vaes_and_params(X_train, X_val, X_test, binarized, n_z, n_ary, e
             'n_ary': n_ary,
             'n_samples': train_params['obj_samples'],
             'encoder_distribution': encoder_distribution,
-            'network_architecture': network_architecture,
-            'mem_fraction': mem_fraction
+            'network_architecture': network_architecture
         }
     }
 
