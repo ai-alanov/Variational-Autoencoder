@@ -5,9 +5,10 @@ from utils import *
 from itertools import chain
 
 class VAE(object):
-    def __init__(self, x, n_input, n_z, network_architecture, learning_rate, 
+    def __init__(self, x, dataset, n_input, n_z, network_architecture, learning_rate, 
                  encoder_distribution='multinomial', decoder_distribution='multinomial', 
                  nonlinearity=tf.nn.softplus, n_ary=None, n_samples=1, train_bias=None):
+        self.dataset = dataset
         self.n_input = n_input
         self.n_z = n_z
         self.network_architecture = network_architecture
@@ -176,6 +177,13 @@ class VAE(object):
     
     def name(self):
         return str(self)
+    
+    def dataset_name(self):
+        return self.dataset
+    
+    def parameters(self):
+        return '{}-{}n_ary-m{}-nz{}-lr{:.4f}'.format(self.encoder_distribution, self.n_ary, 
+                                                 self.n_samples_value, self.n_z, self.learning_rate_value)
     
     def get_decoder_gradients(self, X, learning_rate=None, n_samples=None):
         learning_rate = self.learning_rate_value if learning_rate is None else learning_rate
