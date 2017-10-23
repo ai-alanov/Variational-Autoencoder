@@ -238,8 +238,7 @@ def train_model(vaes, vae_params, train_params, val_params, test_params, config_
         if epoch % config_params['save_step'] == 0:
             if config_params['save_weights'] == True:
                 save_vae_weights(vaes, sess, epoch, config_params['save_path'])
-    for vae in vaes:
-        vae.close()
+    sess.close()
     tf.reset_default_graph()
             
 def test_model(vaes, vae_params, test_params, val_params, config_params):
