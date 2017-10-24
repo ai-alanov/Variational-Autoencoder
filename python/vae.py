@@ -409,8 +409,9 @@ class GumbelSoftmaxTrickVAE(VAE):
         super().__init__(*args, **kwargs)
         self.temperature = temperature
         
-        if self.encoder_distribution is not 'multinomial':
-            raise ValueError(str(self) + ' does not support the encoder distribution')
+        if self.encoder_distribution != 'multinomial':
+            error_message = ' does not support the {} encoder distribution'.format(self.encoder_distribution)
+            raise ValueError(str(self) + error_message)
         
         self._create_network()
         
