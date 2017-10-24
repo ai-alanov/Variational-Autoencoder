@@ -54,7 +54,7 @@ def main():
         'dataset': 'BinaryMNIST',
         'n_z': options.n_z,
         'n_ary': options.n_ary,
-        'encoder_distribution': 'gaussian',
+        'encoder_distribution': options.encoder_distribution,
         'learning_rate': options.learning_rate,
         'train_batch_size': 128,
         'train_obj_samples': options.train_obj_samples,
