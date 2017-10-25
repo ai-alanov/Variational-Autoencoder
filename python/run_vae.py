@@ -42,6 +42,7 @@ def main():
     parser.add_option("--l_r", dest="learning_rate", type='float', help="learning rate")
     parser.add_option("--n_samples", dest="train_obj_samples", type='int', help="train objective samples")
     parser.add_option("--c_devs", dest="cuda_devices", type='string', help="cuda devices")
+    parser.add_option("--log_path", dest="logging_path", type='string', help="logging path")
     (options, args) = parser.parse_args()
     
     binarized_mnist = binarized_mnist_fixed_binarization('datasets/', validation_size=10000)
@@ -69,7 +70,8 @@ def main():
         'mem_fraction': 0.5,
         'all_vaes': True, 
         'mode': 'train', 
-        'results_dir': 'test_results'
+        'results_dir': 'test_results',
+        'logging_path': options.logging_path
     }
 
     train_model(**setup_input_vaes_and_params(**params))
