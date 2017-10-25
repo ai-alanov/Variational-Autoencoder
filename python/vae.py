@@ -182,7 +182,7 @@ class VAE(object):
         return self.dataset
     
     def parameters(self):
-        return '{}-{}n_ary-m{}-nz{}-lr{:.4f}'.format(self.encoder_distribution, self.n_ary, 
+        return '{}-{}n_ary-m{}-nz{}-lr{:.5f}'.format(self.encoder_distribution, self.n_ary, 
                                                  self.n_samples_value, self.n_z, self.learning_rate_value)
     
     def get_decoder_gradients(self, X, learning_rate=None, n_samples=None):
