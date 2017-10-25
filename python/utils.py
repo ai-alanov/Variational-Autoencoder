@@ -190,17 +190,25 @@ def run_epoch_evaluation(vaes, sess, input_x, test_params, **kwargs):
 
 def clear_output():
     if sys.stdout.isatty():
-        os.system('cls' if os.name == 'nt' else 'clear')
+        pass #os.system('cls' if os.name == 'nt' else 'clear')
     else:
         display.clear_output()
         
-def print_costs(vaes, test_costs, val_costs=None, train_costs=None):
+def log_output(output, logging_path=None, **kwargs):
+    if sys.stdout.isatty() or (logging_path is not None):
+        with open(logging_path, 'a') as f:
+            print(output, file=f, **kwargs)
+    else:
+        print(output, **kwargs)
+    
+def print_costs(vaes, epoch, test_costs, val_costs=None, train_costs=None, logging_path=None):
+    log_ouput(epoch+1, logging_path)
     for vae in vaes:
         name = vae.name()
         train_output = 'train cost = {:.9f}, '.format(train_costs[name]) if train_costs else ''
         val_output = 'validation cost = {:.9f}, '.format(val_costs[name]) if val_costs else ''
         test_output = 'test cost = {:.9f}'.format(test_costs[name])
-        print(name + ': ' + train_output + val_output + test_output, flush=True)
+        log_output(name + ': ' + train_output + val_output + test_output, logging_path, flush=True)
         
 def plot_loss(vaes, test_loss, val_loss, epoch, step, loss_name='Test+Validation', start=0):
     plt.figure(figsize=(12, 8))
@@ -240,7 +248,7 @@ def train_model(vaes, vae_params, train_params, val_params, test_params, config_
                 val_loss[vae.name()].append(val_costs[vae.name()])
                 test_loss[vae.name()].append(test_costs[vae.name()])
             clear_output()
-            print_costs(vaes, test_costs, val_costs, train_costs)
+            print_costs(vaes, epoch, test_costs, val_costs, train_costs, config_params['logging_path'])
             plot_loss(vaes, test_loss, val_loss, epoch, config_params['display_step'])
         if epoch % config_params['save_step'] == 0:
             if config_params['save_weights'] == True:
@@ -372,7 +380,7 @@ def setup_input_vaes_and_params(X_train, X_val, X_test, dataset, n_z, n_ary, enc
                                 train_batch_size, train_obj_samples, val_batch_size, val_obj_samples, 
                                 test_batch_size, test_obj_samples, cuda_devices, save_step, n_epochs=3001, 
                                 save_weights=True, mem_fraction=0.333, all_vaes=True, mode='train', 
-                                results_dir=None):
+                                results_dir=None, logging_path='logging.txt'):
     n_input = X_train.images.shape[1]
     n_hidden = 200
     network_architecture = {
@@ -416,7 +424,8 @@ def setup_input_vaes_and_params(X_train, X_val, X_test, dataset, n_z, n_ary, enc
         'save_path': 'weights',
         'cuda_devices': cuda_devices,
         'mem_fraction': mem_fraction,
-        'results_dir': results_dir
+        'results_dir': results_dir,
+        'logging_path': logging_path
     }
     vae_params = {
         'common_params': {
