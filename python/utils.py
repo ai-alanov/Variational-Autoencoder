@@ -2,6 +2,7 @@ import numpy as np
 import tensorflow as tf
 import collections
 import os
+import sys
 import glob
 from itertools import chain
 from tqdm import tqdm
@@ -192,6 +193,7 @@ def clear_output():
         os.system('cls' if os.name == 'nt' else 'clear')
     else:
         display.clear_output()
+        
 def print_costs(vaes, test_costs, val_costs=None, train_costs=None):
     for vae in vaes:
         name = vae.name()
