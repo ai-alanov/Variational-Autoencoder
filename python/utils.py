@@ -11,7 +11,7 @@ import pickle
 
 import matplotlib.pyplot as plt
 import seaborn as sns
-from IPython.display import clear_output
+from IPython import display
 
 from tensorflow.contrib.learn.python.learn.datasets import base, mnist
 from tensorflow.python.framework import dtypes
@@ -187,6 +187,11 @@ def run_train_step(vaes, sess, input_x, train_params):
 def run_epoch_evaluation(vaes, sess, input_x, test_params, **kwargs):
     return run_epoch(vaes, sess, input_x, **test_params, is_train=False, **kwargs)
 
+def clear_output():
+    if sys.stdout.isatty():
+        os.system('cls' if os.name == 'nt' else 'clear')
+    else:
+        display.clear_output()
 def print_costs(vaes, test_costs, val_costs=None, train_costs=None):
     for vae in vaes:
         name = vae.name()
@@ -356,12 +361,9 @@ def choose_vaes_and_learning_rates(encoder_distribution, train_obj_samples, lear
             vaes = [vae.LogDerTrickVAE, vae.NVILVAE, vae.MuPropVAE, vae.GumbelSoftmaxTrickVAE]
         else:
             vaes = [vae.GumbelSoftmaxTrickVAE]
-#             vaes = []
     if train_obj_samples > 1:
         vaes.append(vae.VIMCOVAE)
     learning_rates = [learning_rate] * len(vaes)
-#     if encoder_distribution == 'gaussian':
-#         learning_rates[0] = 1e-3
     return vaes, learning_rates
 
 def setup_input_vaes_and_params(X_train, X_val, X_test, dataset, n_z, n_ary, encoder_distribution, learning_rate,
