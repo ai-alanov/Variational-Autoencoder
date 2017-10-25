@@ -202,7 +202,7 @@ def log_output(output, logging_path=None, **kwargs):
         print(output, **kwargs)
     
 def print_costs(vaes, epoch, test_costs, val_costs=None, train_costs=None, logging_path=None):
-    log_ouput(epoch+1, logging_path)
+    log_output(epoch+1, logging_path)
     for vae in vaes:
         name = vae.name()
         train_output = 'train cost = {:.9f}, '.format(train_costs[name]) if train_costs else ''
