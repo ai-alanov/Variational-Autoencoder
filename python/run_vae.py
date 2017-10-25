@@ -43,7 +43,7 @@ def main():
     parser.add_option("--l_r", type='float', help="learning rate")
     parser.add_option("--n_samples", type='int', help="train objective samples")
     parser.add_option("--c_devs", type='string', help="cuda devices")
-    parser.add_option("--mem_frac", type='float', help="memory fraction used in gpu")
+    parser.add_option("--mem_frac", type='float', default=0.5, help="memory fraction used in gpu")
     (options, args) = parser.parse_args()
     logging_file = '-'.join(sorted(['{}{}'.format(k, v) for k, v in vars(options).items()]))
     logging_file += datetime.now().strftime("_%H:%M:%S") + '.txt'
