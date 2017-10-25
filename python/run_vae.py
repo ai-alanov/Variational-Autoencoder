@@ -16,6 +16,7 @@ sns.set_context(
 from tensorflow.examples.tutorials.mnist import input_data 
 from collections import defaultdict
 from tqdm import tqdm
+from datetime import datetime
 from optparse import OptionParser
 import sys
 sys.path.append('../python/')
@@ -31,19 +32,23 @@ warnings.filterwarnings('ignore', module='matplotlib')
 
 from vae import VAE, LogDerTrickVAE, VIMCOVAE, NVILVAE, MuPropVAE, GumbelSoftmaxTrickVAE
 from utils import train_model, test_model, consider_stds, get_gradient_mean_and_std
-from utils import binarized_mnist_fixed_binarization, setup_input_vaes_and_params
+from utils import binarized_mnist_fixed_binarization, setup_input_vaes_and_params, makedirs
 
 def main():
     parser = OptionParser(usage="usage: %prog [options]",
                           version="%prog 1.0")
-    parser.add_option("--n_z", dest="n_z", type='int', help="size of stochastic layer")
-    parser.add_option("--n_ary", dest="n_ary", type='int', help="arity of latent variable")
-    parser.add_option("--en_dist", dest="encoder_distribution", type='string', help="encoder distribution")
-    parser.add_option("--l_r", dest="learning_rate", type='float', help="learning rate")
-    parser.add_option("--n_samples", dest="train_obj_samples", type='int', help="train objective samples")
-    parser.add_option("--c_devs", dest="cuda_devices", type='string', help="cuda devices")
-    parser.add_option("--log_path", dest="logging_path", type='string', help="logging path")
+    parser.add_option("--n_z", type='int', help="size of stochastic layer")
+    parser.add_option("--n_ary", type='int', help="arity of latent variable")
+    parser.add_option("--en_dist", type='string', help="encoder distribution")
+    parser.add_option("--l_r", type='float', help="learning rate")
+    parser.add_option("--n_samples", type='int', help="train objective samples")
+    parser.add_option("--c_devs", type='string', help="cuda devices")
     (options, args) = parser.parse_args()
+    logging_file = '-'.join(sorted(['{}{}'.format(k, v) for k, v in vars(options).items()]))
+    logging_file += datetime.now().strftime("_%H:%M:%S") + '.txt'
+    log_dir = os.path.join('logs', datetime.now().strftime("%Y-%m-%d"))
+    makedirs(log_dir)
+    logging_path = os.path.join(log_dir, logging_file)
     
     binarized_mnist = binarized_mnist_fixed_binarization('datasets/', validation_size=10000)
     X_train, X_val, X_test = binarized_mnist.train, binarized_mnist.validation, binarized_mnist.test
@@ -55,15 +60,15 @@ def main():
         'dataset': 'BinaryMNIST',
         'n_z': options.n_z,
         'n_ary': options.n_ary,
-        'encoder_distribution': options.encoder_distribution,
-        'learning_rate': options.learning_rate,
+        'encoder_distribution': options.en_dist,
+        'learning_rate': options.l_r,
         'train_batch_size': 128,
-        'train_obj_samples': options.train_obj_samples,
+        'train_obj_samples': options.n_samples,
         'val_batch_size': 1024,
         'val_obj_samples': 5, 
         'test_batch_size': 1024,
         'test_obj_samples': 5,        
-        'cuda_devices': options.cuda_devices,
+        'cuda_devices': options.c_devs,
         'save_step': 100,
         'n_epochs': 3001,
         'save_weights': True,
@@ -71,7 +76,7 @@ def main():
         'all_vaes': True, 
         'mode': 'train', 
         'results_dir': 'test_results',
-        'logging_path': options.logging_path
+        'logging_path': logging_path
     }
 
     train_model(**setup_input_vaes_and_params(**params))
