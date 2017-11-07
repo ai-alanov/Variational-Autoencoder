@@ -2,6 +2,8 @@
 import numpy as np
 import tensorflow as tf
 
+from collections import defaultdict
+
 from utils import *  # noqa
 from itertools import chain
 
