@@ -17,7 +17,7 @@ from IPython import display
 from tensorflow.contrib.learn.python.learn.datasets import base, mnist
 from tensorflow.python.framework import dtypes
 
-from vae import *  # noqa
+import vae
 
 
 def flatten(d, parent_key='', sep='_'):
@@ -489,16 +489,16 @@ def choose_vaes_and_learning_rates(encoder_distribution, train_obj_samples,
                                    learning_rate, all_vaes=True):
     if encoder_distribution == 'gaussian':
         if all_vaes:
-            vaes = [VAE, LogDerTrickVAE, NVILVAE, MuPropVAE]  # noqa
+            vaes = [vae.VAE, vae.LogDerTrickVAE, vae.NVILVAE, vae.MuPropVAE]  # noqa
         else:
-            vaes = [VAE, LogDerTrickVAE, NVILVAE, MuPropVAE]  # noqa
+            vaes = [vae.VAE, vae.LogDerTrickVAE, vae.NVILVAE, vae.MuPropVAE]  # noqa
     elif encoder_distribution == 'multinomial':
         if all_vaes:
-            vaes = [LogDerTrickVAE, NVILVAE, MuPropVAE, GumbelSoftmaxTrickVAE]  # noqa
+            vaes = [vae.LogDerTrickVAE, vae.NVILVAE, vae.MuPropVAE, vae.GumbelSoftmaxTrickVAE]  # noqa
         else:
-            vaes = [GumbelSoftmaxTrickVAE]  # noqa
+            vaes = [vae.GumbelSoftmaxTrickVAE]  # noqa
     if train_obj_samples > 1:
-        vaes.append(VIMCOVAE)  # noqa
+        vaes.append(vae.VIMCOVAE)  # noqa
     learning_rates = [learning_rate] * len(vaes)
     return vaes, learning_rates
 
