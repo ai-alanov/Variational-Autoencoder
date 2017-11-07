@@ -174,9 +174,11 @@ def run_epoch(vaes, sess, input_x, data, n_samples, batch_size,
             restore_vae_weights(vaes, sess, epoch, save_path)
         for vae in vaes:
             if is_train:
-                d_tensors, f_dict = vae.partial_fit(n_samples=obj_samples)
+                d_tensors, f_dict = vae.partial_fit(n_samples=obj_samples,
+                                                    is_train=is_train)
             else:
-                d_tensors, f_dict = vae.loss(n_samples=obj_samples)
+                d_tensors, f_dict = vae.loss(n_samples=obj_samples,
+                                             is_train=is_train)
             dict_of_tensors[vae.name()] = d_tensors
             feed_dict.update(f_dict)
         dict_of_results = sess.run(dict_of_tensors, feed_dict)
