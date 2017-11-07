@@ -151,9 +151,10 @@ def save_loss(vaes, loss, save_dir, results_dir, loss_name, epochs=None):
         now = os.path.basename(latest_file)
         save_path = os.path.join(save_path, now, results_dir)
         makedirs(save_path)
-        if loss_name != 'vall.pkl':
-            loss_name = now + '_' + loss_name
-        file_name = os.path.join(save_path, loss_name)
+        file_name = loss_name
+        if loss_name != 'val.pkl':
+            file_name = now + '_' + loss_name
+        file_name = os.path.join(save_path, file_name)
         with open(file_name, 'wb') as f:
             info = {
                 vae.name(): loss[vae.name()]
