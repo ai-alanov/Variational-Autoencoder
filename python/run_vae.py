@@ -87,8 +87,10 @@ def main():
         'results_dir': 'test_results',
         'logging_path': logging_path
     }
-
-    train_model(**setup_vaes_and_params(**params))
+    if options.mode == 'train':
+        train_model(**setup_vaes_and_params(**params))
+    else:
+        test_model(**setup_vaes_and_params(**params))
 
 
 if __name__ == '__main__':
