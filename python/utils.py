@@ -201,13 +201,12 @@ def run_epoch(vaes, sess, input_x, data, n_samples, batch_size,
         batch_xs = get_batch(data, batch_size)
         dict_of_tensors = {}
         feed_dict = {input_x: batch_xs}
+        if need_to_restore:
+            restore_vae_weights(vaes, sess, save_path, epoch)
         for vae in vaes:
             if is_train:
                 d_tensors, f_dict = vae.partial_fit(n_samples=obj_samples)
             else:
-                if need_to_restore:
-                    vae.restore_weights(sess, os.path.join(
-                        save_path, vae.name() + '_{}'.format(epoch + 1)))
                 d_tensors, f_dict = vae.loss(n_samples=obj_samples)
             dict_of_tensors[vae.name()] = d_tensors
             feed_dict.update(f_dict)
@@ -291,6 +290,45 @@ def save_vae_weights(vaes, sess, epoch, save_dir):
         vae.save_weights(sess, os.path.join(save_path, '{}'.format(epoch + 1)))
 
 
+def restore_vae_weights(vaes, sess, epoch, save_dir):
+    for vae in vaes:
+        save_path = os.path.join(save_dir, vae.name(), vae.dataset_name(),
+                                 vae.parameters())
+        latest_file = sorted(glob.glob(os.path.join(save_path, '*')))[-1]
+        now = os.path.basename(latest_file)
+        save_path = os.path.join(save_path, now)
+        vae_epoch = epoch if isinstance(epoch, int) else epoch[vae.name()]
+        weights_file = os.path.join(save_path, '{}'.format(vae_epoch + 1))
+        vae.restore_weights(sess, weights_file)
+
+
+def load_loss(vaes, save_dir, results_dir, loss_name):
+    loss = defaultdict(list)
+    for vae in vaes:
+        save_path = os.path.join(save_dir, vae.name(), vae.dataset_name(),
+                                 vae.parameters())
+        latest_file = sorted(glob.glob(os.path.join(save_path, '*')))[-1]
+        now = os.path.basename(latest_file)
+        save_path = os.path.join(save_path, now, results_dir)
+        file_name = os.path.join(save_path, loss_name)
+        if os.path.exists(file_name):
+            with open(file_name, 'rb') as f:
+                loss.update(pickle.load(f))
+    return loss
+
+
+def save_loss(vaes, loss, save_dir, results_dir, loss_name):
+    for vae in vaes:
+        save_path = os.path.join(save_dir, vae.name(), vae.dataset_name(),
+                                 vae.parameters())
+        latest_file = sorted(glob.glob(os.path.join(save_path, '*')))[-1]
+        now = os.path.basename(latest_file)
+        save_path = os.path.join(save_path, now, results_dir)
+        file_name = os.path.join(save_path, loss_name)
+        with open(file_name, 'wb') as f:
+            pickle.dump({vae.name(): loss[vae.name()]}, f)
+
+
 def train_model(vaes, vae_params, train_params, val_params, test_params,
                 config_params):
     set_up_cuda_devices(config_params['cuda_devices'])
@@ -320,36 +358,33 @@ def train_model(vaes, vae_params, train_params, val_params, test_params,
 
 def test_model(vaes, vae_params, test_params, val_params, config_params):
     set_up_cuda_devices(config_params['cuda_devices'])
-    vaes = set_up_vaes(vaes, **vae_params)
+    vaes, input_x = set_up_vaes(vaes, **vae_params)
+    sess = set_up_session(vaes, config_params)
     save_path = config_params['save_path']
-    results_path = os.path.join(save_path, config_params['results_dir'])
-    makedirs(results_path)
-    val_loss = defaultdict(list)
-    val_file = os.path.join(results_path, 'val.pkl')
-    if os.path.exists(val_file):
-        with open(val_file, 'rb') as f:
-            val_loss = pickle.load(f)
-    else:
-        for epoch in tqdm(range(config_params['save_step'],
-                                config_params['n_epochs'],
-                                config_params['save_step'])):
-            val_costs = run_epoch_evaluation(vaes, val_params,
-                                             need_to_restore=True,
-                                             save_path=save_path,
-                                             epoch=epoch)
-            for vae in vaes:
-                val_loss[vae.name()].append(val_costs[vae.name()])
-    with open(val_file, 'wb') as f:
-        pickle.dump(val_loss, f)
+    val_loss = load_loss(vaes, save_path,
+                         config_params['results_dir'], 'val.pkl')
+    noncashed_vaes = [vae for vae in vaes if not val_loss[vae.name()]]
+    for epoch in tqdm(range(config_params['save_step'],
+                            config_params['n_epochs'],
+                            config_params['save_step'])):
+        val_costs = run_epoch_evaluation(noncashed_vaes, sess,
+                                         input_x, val_params,
+                                         need_to_restore=True,
+                                         save_path=save_path,
+                                         epoch=epoch)
+        for vae in noncashed_vaes:
+            val_loss[vae.name()].append(val_costs[vae.name()])
+    save_loss(vaes, val_loss, save_path,
+              config_params['results_dir'], 'val.pkl')
     test_min_epochs = defaultdict(int)
     for vae in vaes:
         n_steps = np.argmin(val_loss[vae.name()]) + 1
         test_min_epochs[vae.name()] = n_steps * config_params['save_step']
-    test_loss = defaultdict(list)
-    file_name = 'Test-m{}.pkl'.format(test_params['obj_samples'])
-    results_file = os.path.join(results_path, file_name)
-    with open(results_file, 'wb') as f:
-        pickle.dump(test_loss, f)
+    test_loss = run_epoch_evaluation(vaes, sess, input_x, test_params,
+                                     need_to_restore=True, save_path=save_path,
+                                     epoch=test_min_epochs)
+    save_loss(vaes, test_loss, save_path, config_params['results_dir'],
+              'Test-m{}.pkl'.format(test_params['obj_samples']))
     for vae in vaes:
         vae.close()
     tf.reset_default_graph()
