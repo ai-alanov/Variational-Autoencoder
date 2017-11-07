@@ -24,6 +24,7 @@ class VAE(object):
         self.n_ary = n_ary
         self.n_samples_value = n_samples
         self.n_samples = tf.placeholder(tf.int32, shape=[])
+        self.is_train = tf.placeholder(tf.int32, shape=[])
         self.train_bias = train_bias
 
         with tf.name_scope('input'):
@@ -179,7 +180,8 @@ class VAE(object):
     def initialize_weights(self, sess):
         sess.run(self.init_weights)
 
-    def partial_fit(self, learning_rate_decay=1.0, n_samples=None):
+    def partial_fit(self, learning_rate_decay=1.0,
+                    n_samples=None, is_train=True):
         learning_rate = learning_rate_decay * self.learning_rate_value
         n_samples = self.n_samples_value if n_samples is None else n_samples
         dict_of_tensors = {
@@ -187,7 +189,9 @@ class VAE(object):
             'encoder_minimizer': self.encoder_minimizer,
             'cost_for_display': self.cost_for_display
         }
-        feed_dict = {self.learning_rate: learning_rate, self.n_samples: n_samples}
+        feed_dict = {self.learning_rate: learning_rate,
+                     self.n_samples: n_samples,
+                     self.is_train: 1 if is_train else 0}
         return dict_of_tensors, feed_dict
 
     def name(self):
@@ -453,8 +457,17 @@ class GumbelSoftmaxTrickVAE(VAE):
         self.z_probs = tf.reshape(tf.nn.softmax(self.z_mean),
                                   [self.batch_size, self.n_samples, self.n_ary * self.n_z])
 
-        self.z = tf.reshape(gumbel_softmax(self.z_mean, self.temperature),
+        def true_fn(z):
+            return gumbel_softmax(z, self.temperature)
+
+        def false_fn(z):
+            return tf.one_hot(tf.squeeze(tf.multinomial(z, 1), 1), self.n_ary, 1.0, 0.0)
+
+        self.z = tf.cond(self.is_train == 1, true_fn, false_fn)
+
+        self.z = tf.reshape(self.z,
                             [self.batch_size, self.n_samples, self.n_ary * self.n_z])
+
         self.x_reconst = self._create_decoder_part(self.z)
 
     def _create_loss_optimizer(self):
