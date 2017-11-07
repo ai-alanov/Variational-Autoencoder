@@ -463,7 +463,7 @@ class GumbelSoftmaxTrickVAE(VAE):
         def false_fn(z):
             return tf.one_hot(tf.squeeze(tf.multinomial(z, 1), 1), self.n_ary, 1.0, 0.0)
 
-        self.z = tf.cond(self.is_train == 1, true_fn, false_fn)
+        self.z = tf.cond(tf.equal(self.is_train, tf.constant(1)), true_fn, false_fn)
 
         self.z = tf.reshape(self.z,
                             [self.batch_size, self.n_samples, self.n_ary * self.n_z])
