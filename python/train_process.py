@@ -52,40 +52,6 @@ def get_batch(data, batch_size):  # ToDo: get random batch
     return batch_xs
 
 
-def run_epoch(vaes, sess, input_x, data, n_samples, batch_size,
-              obj_samples, is_train=True, need_to_restore=False,
-              save_path=None, epoch=None):
-    costs = defaultdict(list)
-    n_batches = int(n_samples / batch_size)
-    for _ in range(n_batches):
-        batch_xs = get_batch(data, batch_size)
-        dict_of_tensors = {}
-        feed_dict = {input_x: batch_xs}
-        if need_to_restore:
-            restore_vae_weights(vaes, sess, save_path, epoch)
-        for vae in vaes:
-            if is_train:
-                d_tensors, f_dict = vae.partial_fit(n_samples=obj_samples)
-            else:
-                d_tensors, f_dict = vae.loss(n_samples=obj_samples)
-            dict_of_tensors[vae.name()] = d_tensors
-            feed_dict.update(f_dict)
-        dict_of_results = sess.run(dict_of_tensors, feed_dict)
-        for vae in vaes:
-            name = vae.name()
-            costs[name].append(dict_of_results[name]['cost_for_display'])
-    return dict([(vae.name(), np.mean(costs[vae.name()])) for vae in vaes])
-
-
-def run_train_step(vaes, sess, input_x, train_params):
-    return run_epoch(vaes, sess, input_x, **train_params)
-
-
-def run_epoch_evaluation(vaes, sess, input_x, test_params, **kwargs):
-    return run_epoch(vaes, sess, input_x, **test_params,
-                     is_train=False, **kwargs)
-
-
 def clear_output():
     if sys.stdout.isatty():
         pass  # os.system('cls' if os.name == 'nt' else 'clear')
@@ -187,6 +153,40 @@ def save_loss(vaes, loss, save_dir, results_dir, loss_name):
         file_name = os.path.join(save_path, loss_name)
         with open(file_name, 'wb') as f:
             pickle.dump({vae.name(): loss[vae.name()]}, f)
+
+
+def run_epoch(vaes, sess, input_x, data, n_samples, batch_size,
+              obj_samples, is_train=True, need_to_restore=False,
+              save_path=None, epoch=None):
+    costs = defaultdict(list)
+    n_batches = int(n_samples / batch_size)
+    for _ in range(n_batches):
+        batch_xs = get_batch(data, batch_size)
+        dict_of_tensors = {}
+        feed_dict = {input_x: batch_xs}
+        if need_to_restore:
+            restore_vae_weights(vaes, sess, epoch, save_path)
+        for vae in vaes:
+            if is_train:
+                d_tensors, f_dict = vae.partial_fit(n_samples=obj_samples)
+            else:
+                d_tensors, f_dict = vae.loss(n_samples=obj_samples)
+            dict_of_tensors[vae.name()] = d_tensors
+            feed_dict.update(f_dict)
+        dict_of_results = sess.run(dict_of_tensors, feed_dict)
+        for vae in vaes:
+            name = vae.name()
+            costs[name].append(dict_of_results[name]['cost_for_display'])
+    return dict([(vae.name(), np.mean(costs[vae.name()])) for vae in vaes])
+
+
+def run_train_step(vaes, sess, input_x, train_params):
+    return run_epoch(vaes, sess, input_x, **train_params)
+
+
+def run_epoch_evaluation(vaes, sess, input_x, test_params, **kwargs):
+    return run_epoch(vaes, sess, input_x, **test_params,
+                     is_train=False, **kwargs)
 
 
 def train_model(vaes, vae_params, train_params, val_params, test_params,
