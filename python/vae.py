@@ -189,9 +189,22 @@ class VAE(object):
             'encoder_minimizer': self.encoder_minimizer,
             'cost_for_display': self.cost_for_display
         }
-        feed_dict = {self.learning_rate: learning_rate,
-                     self.n_samples: n_samples,
-                     self.is_train: 1 if is_train else 0}
+        feed_dict = {
+            self.learning_rate: learning_rate,
+            self.n_samples: n_samples,
+            self.is_train: 1 if is_train else 0
+        }
+        return dict_of_tensors, feed_dict
+
+    def loss(self, n_samples=None, is_train=True):
+        n_samples = self.n_samples_value if n_samples is None else n_samples
+        dict_of_tensors = {
+            'cost_for_display': self.cost_for_display
+        }
+        feed_dict = {
+            self.n_samples: n_samples,
+            self.is_train: 1 if is_train else 0
+        }
         return dict_of_tensors, feed_dict
 
     def name(self):
@@ -239,14 +252,6 @@ class VAE(object):
 
     def reconstruct(self, X):
         return self.sess.run(self.x_reconst, feed_dict={self.x: X})
-
-    def loss(self, n_samples=None):
-        n_samples = self.n_samples_value if n_samples is None else n_samples
-        dict_of_tensors = {
-            'cost_for_display': self.cost_for_display
-        }
-        feed_dict = {self.n_samples: n_samples}
-        return dict_of_tensors, feed_dict
 
     def save_weights(self, sess, save_path):
         self.saver.save(sess, save_path)
