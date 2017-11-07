@@ -150,6 +150,7 @@ def save_loss(vaes, loss, save_dir, results_dir, loss_name):
         latest_file = sorted(glob.glob(os.path.join(save_path, '*')))[-1]
         now = os.path.basename(latest_file)
         save_path = os.path.join(save_path, now, results_dir)
+        makedirs(save_path)
         file_name = os.path.join(save_path, loss_name)
         with open(file_name, 'wb') as f:
             pickle.dump({vae.name(): loss[vae.name()]}, f)
