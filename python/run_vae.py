@@ -13,8 +13,9 @@ import matplotlib.pyplot as plt  # noqa
 import seaborn as sns  # noqa
 
 sys.path.append('../python/')
-from utils import train_model, test_model  # noqa
-from utils import get_fixed_mnist, setup_vaes_and_params, makedirs  # noqa
+from utils import makedirs  # noqa
+from train_process import train_model, test_model  # noqa
+from train_process import get_fixed_mnist, setup_vaes_and_params  # noqa
 
 np.random.seed(1234)
 tf.set_random_seed(1234)
