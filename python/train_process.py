@@ -143,7 +143,7 @@ def load_loss(vaes, save_dir, results_dir, loss_name):
     return loss
 
 
-def save_loss(vaes, loss, save_dir, results_dir, loss_name):
+def save_loss(vaes, loss, save_dir, results_dir, loss_name, epochs=None):
     for vae in vaes:
         save_path = os.path.join(save_dir, vae.name(), vae.dataset_name(),
                                  vae.parameters())
@@ -153,7 +153,12 @@ def save_loss(vaes, loss, save_dir, results_dir, loss_name):
         makedirs(save_path)
         file_name = os.path.join(save_path, loss_name)
         with open(file_name, 'wb') as f:
-            pickle.dump({vae.name(): loss[vae.name()]}, f)
+            info = {
+                vae.name(): loss[vae.name()]
+            }
+            if epochs:
+                info['best_val_epoch'] = epochs[vae.name()]
+            pickle.dump(info, f)
 
 
 def run_epoch(vaes, sess, input_x, data, n_samples, batch_size,
@@ -245,7 +250,8 @@ def test_model(vaes, vae_params, test_params, val_params, config_params):
                                      need_to_restore=True, save_path=save_path,
                                      epoch=test_min_epochs)
     save_loss(vaes, test_loss, save_path, config_params['results_dir'],
-              'Test-m{}.pkl'.format(test_params['obj_samples']))
+              'Test-m{}.pkl'.format(test_params['obj_samples']),
+              test_min_epochs)
     sess.close()
     tf.reset_default_graph()
 
