@@ -246,8 +246,7 @@ def test_model(vaes, vae_params, test_params, val_params, config_params):
                                      epoch=test_min_epochs)
     save_loss(vaes, test_loss, save_path, config_params['results_dir'],
               'Test-m{}.pkl'.format(test_params['obj_samples']))
-    for vae in vaes:
-        vae.close()
+    sess.close()
     tf.reset_default_graph()
 
 
