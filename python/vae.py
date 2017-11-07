@@ -457,11 +457,11 @@ class GumbelSoftmaxTrickVAE(VAE):
         self.z_probs = tf.reshape(tf.nn.softmax(self.z_mean),
                                   [self.batch_size, self.n_samples, self.n_ary * self.n_z])
 
-        def true_fn(z):
-            return gumbel_softmax(z, self.temperature)
+        def true_fn():
+            return gumbel_softmax(self.z_mean, self.temperature)
 
-        def false_fn(z):
-            return tf.one_hot(tf.squeeze(tf.multinomial(z, 1), 1), self.n_ary, 1.0, 0.0)
+        def false_fn():
+            return tf.one_hot(tf.squeeze(tf.multinomial(self.z_mean, 1), 1), self.n_ary, 1.0, 0.0)
 
         self.z = tf.cond(tf.equal(self.is_train, tf.constant(1)), true_fn, false_fn)
 
