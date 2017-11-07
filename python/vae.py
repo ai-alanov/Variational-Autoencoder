@@ -2,7 +2,7 @@
 import numpy as np
 import tensorflow as tf
 
-from utils import *
+from utils import *  # noqa
 from itertools import chain
 
 
