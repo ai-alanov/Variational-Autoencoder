@@ -15,7 +15,8 @@ import seaborn as sns  # noqa
 sys.path.append('../python/')
 from utils import makedirs  # noqa
 from train_process import train_model, test_model  # noqa
-from train_process import get_fixed_mnist, setup_vaes_and_params  # noqa
+from train_process import get_fixed_mnist, get_fixed_omniglot  # noqa
+from train_process import setup_vaes_and_params  # noqa
 
 np.random.seed(1234)
 tf.set_random_seed(1234)
@@ -49,6 +50,8 @@ def main():
     parser.add_option("--c_devs", type='string', help="cuda devices")
     parser.add_option("--mem_frac", type='float', default=0.5,
                       help="memory fraction used in gpu")
+    parser.add_option("--dataset", type='string', default='mnist',
+                      help='dataset name')
     parser.add_option("--mode", type='string', default='train',
                       help='train or test')
     (options, args) = parser.parse_args()
@@ -59,9 +62,11 @@ def main():
     makedirs(log_dir)
     logging_path = os.path.join(log_dir, logging_file)
 
-    mnist = get_fixed_mnist('datasets/',
-                            validation_size=10000)
-    X_train, X_val, X_test = mnist.train, mnist.validation, mnist.test
+    if options.dataset == 'mnist':
+        data = get_fixed_mnist('datasets/', validation_size=10000)
+    elif options.dataset == 'omniglot':
+        data = get_fixed_omniglot('datasets/', validation_size=1345)
+    X_train, X_val, X_test = data.train, data.validation, data.test
 
     params = {
         'X_train': X_train,
