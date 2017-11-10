@@ -363,8 +363,8 @@ class NVILVAE(VAE):
         self.baseline_minimizer = self.decoder_optimizer.minimize(self.cost_for_baseline,
                                                                   var_list=self.baseline_weights)
 
-    def partial_fit(self, learning_rate_decay=1.0, n_samples=None):
-        dict_of_tensors, feed_dict = super().partial_fit(learning_rate_decay, n_samples)
+    def partial_fit(self, learning_rate_decay=1.0, n_samples=None, is_train=True):
+        dict_of_tensors, feed_dict = super().partial_fit(learning_rate_decay, n_samples, is_train)
         dict_of_tensors['baseline_minimizer'] = self.baseline_minimizer
         return dict_of_tensors, feed_dict
 
