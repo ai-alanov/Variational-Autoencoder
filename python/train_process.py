@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import numpy as np
+import scipy.io
 import tensorflow as tf
 import os
 import sys
@@ -319,15 +320,68 @@ def consider_stds(vaes, vae_params, data, n_epochs, batch_size, n_iterations,
     plt.show()
 
 
+def shuffle(data):
+    if data.shape[0] > 0:
+        data = data[np.random.choice(data.shape[0],
+                                     size=data.shape[0],
+                                     replace=False)]
+    return data
+
+
+def download_mnist(datasets_dir):
+    import urllib.request
+    import gzip
+
+    mnist_filenames = ['train-images-idx3-ubyte', 't10k-images-idx3-ubyte']
+    for filename in mnist_filenames:
+        path_to_file = os.path.join(datasets_dir, "MNIST", filename)
+        os.makedirs(os.path.dirname(path_to_file), exist_ok=True)
+        url = "http://yann.lecun.com/exdb/mnist/{}.gz".format(filename)
+        urllib.request.urlretrieve(url, path_to_file + '.gz')
+        with gzip.open(path_to_file + '.gz', 'rb') as f:
+            file_content = f.read()
+        with open(path_to_file, 'wb') as f:
+            f.write(file_content)
+        os.remove(path_to_file + '.gz')
+
+    subdatasets = ['train', 'valid', 'test']
+    for subdataset in subdatasets:
+        filename = 'binarized_mnist_{}.amat'.format(subdataset)
+        url = 'http://www.cs.toronto.edu/~larocheh/public/datasets'
+        url = os.path.join(url, 'binarized_mnist', 'binarized_mnist_{}.amat')
+        url = url.format(subdataset)
+        path_to_file = os.path.join(datasets_dir, "BinaryMNIST", filename)
+        os.makedirs(os.path.dirname(path_to_file), exist_ok=True)
+        urllib.request.urlretrieve(url, path_to_file)
+
+
+def download_omniglot(datasets_dir):
+    import urllib.request
+
+    filename = 'chardata.mat'
+    url = 'https://raw.github.com/yburda/iwae/master/datasets/OMNIGLOT'
+    url = os.path.join(url, filename)
+    path_to_file = os.path.join(datasets_dir, "OMNIGLOT", filename)
+    os.makedirs(os.path.dirname(path_to_file), exist_ok=True)
+    if not os.path.exists(path_to_file):
+        urllib.request.urlretrieve(url, path_to_file)
+
+    omni_raw = scipy.io.loadmat(path_to_file)
+    datasets = [omni_raw['data'], omni_raw['testdata']]
+    datasets = list(map(lambda x: x.astype('float32'), datasets))
+
+    def binarize(data):
+        return (np.random.rand(*data.shape) <= data).astype('float32')
+    datasets = list(map(lambda x: binarize(x), datasets))
+    omni_raw['data'], omni_raw['test_data'] = datasets
+    path_to_file = os.path.join(datasets_dir, 'BinaryOMNIGLOT', filename)
+    os.makedirs(os.path.dirname(path_to_file), exist_ok=True)
+    scipy.io.savemat(path_to_file, omni_raw)
+
+
 def get_fixed_mnist(datasets_dir, validation_size=0):
     def lines_to_np_array(lines):
         return np.array([[int(i) for i in line.split()] for line in lines])
-
-    def shuffle(data):
-        if data.shape[0] > 0:
-            data = data[np.random.choice(data.shape[0], size=data.shape[0],
-                                         replace=False)]
-        return data
     with open(os.path.join(datasets_dir, 'BinaryMNIST',
                            'binarized_mnist_train.amat')) as f:
         lines = f.readlines()
@@ -350,6 +404,28 @@ def get_fixed_mnist(datasets_dir, validation_size=0):
 
     options = dict(dtype=dtypes.float32, reshape=False, seed=1234)
 
+    train = mnist.DataSet(train_data, train_data, **options)
+    validation = mnist.DataSet(validation_data, validation_data, **options)
+    test = mnist.DataSet(test_data, test_data, **options)
+
+    return base.Datasets(train=train, validation=validation, test=test)
+
+
+def get_fixed_omniglot(datasets_dir, validation_size=0):
+    def reshape_omni(data):
+        data = data.reshape((-1, 28, 28))
+        return data.reshape((-1, 28 * 28), order='fortran')
+    omni_raw = scipy.io.loadmat(
+        os.path.join(datasets_dir, 'BinaryOMNIGLOT', 'chardata.mat'))
+    train_data = shuffle(reshape_omni(omni_raw['data'].T.astype('float32')))
+    test_data = shuffle(reshape_omni(omni_raw['testdata'].T.astype('float32')))
+    validation_data = train_data[:validation_size]
+    train_data = train_data[validation_size:]
+
+    datasets = [train_data, validation_data, test_data]
+    train_data, validation_data, test_data = map(lambda x: 255.0 * x, datasets)
+
+    options = dict(dtype=dtypes.float32, reshape=False, seed=1234)
     train = mnist.DataSet(train_data, train_data, **options)
     validation = mnist.DataSet(validation_data, validation_data, **options)
     test = mnist.DataSet(test_data, test_data, **options)
