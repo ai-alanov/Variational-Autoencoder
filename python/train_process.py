@@ -81,7 +81,7 @@ def print_costs(vaes, epoch, test_costs, val_costs=None, train_costs=None,
         }
         all_output = vae_name + ': '
         for name in data_names:
-            output = '{} cost = {:.9f}'
+            output = '{} cost = {:.5f} '
             output = output.format(name, costs[name]) if costs[name] else ''
             all_output += output
         log_output(all_output, logging_path, flush=True)
@@ -424,6 +424,25 @@ def get_fixed_omniglot(datasets_dir, validation_size=0):
 
     datasets = [train_data, validation_data, test_data]
     train_data, validation_data, test_data = map(lambda x: 255.0 * x, datasets)
+
+    options = dict(dtype=dtypes.float32, reshape=False, seed=1234)
+    train = mnist.DataSet(train_data, train_data, **options)
+    validation = mnist.DataSet(validation_data, validation_data, **options)
+    test = mnist.DataSet(test_data, test_data, **options)
+
+    return base.Datasets(train=train, validation=validation, test=test)
+
+
+def get_fixed_freyfaces(datasets_dir, validation_size=0, test_size=500):
+    frey_raw = scipy.io.loadmat(
+        os.path.join(datasets_dir, 'FreyFaces', 'frey_rawface.mat'))
+    train_data = shuffle(frey_raw['ff'].T.astype('float32'))
+    train_data, test_data = train_data[test_size:], train_data[:test_size]
+    validation_data = train_data[:validation_size]
+    train_data = train_data[validation_size:]
+
+    datasets = [train_data, validation_data, test_data]
+    train_data, validation_data, test_data = map(lambda x: x, datasets)
 
     options = dict(dtype=dtypes.float32, reshape=False, seed=1234)
     train = mnist.DataSet(train_data, train_data, **options)
