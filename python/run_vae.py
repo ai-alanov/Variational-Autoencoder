@@ -62,9 +62,9 @@ def main():
     makedirs(log_dir)
     logging_path = os.path.join(log_dir, logging_file)
 
-    if options.dataset == 'mnist':
+    if options.dataset == 'BinaryMNIST':
         data = get_fixed_mnist('datasets/', validation_size=10000)
-    elif options.dataset == 'omniglot':
+    elif options.dataset == 'BinaryOMNIGLOT':
         data = get_fixed_omniglot('datasets/', validation_size=1345)
     X_train, X_val, X_test = data.train, data.validation, data.test
 
@@ -72,7 +72,7 @@ def main():
         'X_train': X_train,
         'X_test': X_test,
         'X_val': X_val,
-        'dataset': 'BinaryMNIST',
+        'dataset': options.dataset,
         'n_z': options.n_z,
         'n_ary': options.n_ary,
         'encoder_distribution': options.en_dist,
