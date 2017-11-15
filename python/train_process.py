@@ -145,12 +145,13 @@ def load_loss(vaes, save_dir, results_dir, loss_name):
 
 
 def save_loss(vaes, loss, save_dir, results_dir, loss_name, epochs=None):
-    file_name = str(loss['test_samples']) + '-' + vaes[0].dataset_name()
-    file_name += '-' + vaes[0].parameters()
-    other_save_path = os.path.join(
-        results_dir, file_name)
-    with open(other_save_path, 'wb') as f:
-        pickle.dump(loss, f)
+    if 'test_samples' in loss:
+        file_name = str(loss['test_samples']) + '-' + vaes[0].dataset_name()
+        file_name += '-' + vaes[0].parameters()
+        other_save_path = os.path.join(
+            results_dir, file_name)
+        with open(other_save_path, 'wb') as f:
+            pickle.dump(loss, f)
     for vae in vaes:
         save_path = os.path.join(save_dir, vae.name(), vae.dataset_name(),
                                  vae.parameters())
