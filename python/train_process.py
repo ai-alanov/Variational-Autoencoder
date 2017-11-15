@@ -145,7 +145,7 @@ def load_loss(vaes, save_dir, results_dir, loss_name):
 
 
 def save_loss(vaes, loss, save_dir, results_dir, loss_name, epochs=None):
-    file_name = loss['test_samples'] + '-' + vaes[0].dataset_name()
+    file_name = str(loss['test_samples']) + '-' + vaes[0].dataset_name()
     file_name += '-' + vaes[0].parameters()
     other_save_path = os.path.join(
         results_dir, file_name)
