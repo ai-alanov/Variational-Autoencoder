@@ -259,6 +259,7 @@ def test_model(vaes, vae_params, test_params, val_params, config_params):
     test_loss = run_epoch_evaluation(vaes, sess, input_x, test_params,
                                      need_to_restore=True, save_path=save_path,
                                      epoch=test_min_epochs)
+    test_loss['test_samples'] = test_params['obj_samples']
     save_loss(vaes, test_loss, save_path, config_params['results_dir'],
               'Test-m{}.pkl'.format(test_params['obj_samples']),
               test_min_epochs)
