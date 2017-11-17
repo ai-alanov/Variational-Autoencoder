@@ -34,6 +34,10 @@ tf.logging.set_verbosity(tf.logging.FATAL)
 warnings.filterwarnings('ignore', module='matplotlib')
 
 
+def lrs_callback(option, opt, value, parser):
+    setattr(parser.values, option.dest, list(map(float, value.split(','))))
+
+
 def main():
     parser = OptionParser(usage="usage: %prog [options]",
                           version="%prog 1.0")
@@ -41,6 +45,9 @@ def main():
     parser.add_option("--n_ary", type='int', help="arity of latent variable")
     parser.add_option("--en_dist", type='string', help="encoder distribution")
     parser.add_option("--l_r", type='float', help="learning rate")
+    parser.add_option("--l_rs", type='string',
+                      help="learning rates for validation",
+                      action=lrs_callback)
     parser.add_option("--n_samples", type='int',
                       help="train objective samples")
     parser.add_option("--test_b_size", type='int', default=1024,
@@ -91,7 +98,8 @@ def main():
         'all_vaes': True,
         'mode': options.mode,
         'results_dir': 'test_results',
-        'logging_path': logging_path
+        'logging_path': logging_path,
+        'learning_rates': options.l_rs
     }
     if options.mode == 'train':
         train_model(**setup_vaes_and_params(**params))
