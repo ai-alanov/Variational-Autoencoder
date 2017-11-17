@@ -164,10 +164,7 @@ def save_loss(vaes, loss, save_dir, results_dir, loss_name,
             pickle.dump(loss, f)
     for lr in loss.keys():
         for vae in vaes:
-            save_path = os.path.join(save_dir, vae.name(), vae.dataset_name(),
-                                     vae.parameters(learning_rate=float(lr)))
-            latest_file = sorted(glob.glob(os.path.join(save_path, '*')))[-1]
-            now = os.path.basename(latest_file)
+            save_path, now = find_file(vae, save_dir, lr)
             save_path = os.path.join(save_path, now, results_dir)
             makedirs(save_path)
             file_name = loss_name
