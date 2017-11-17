@@ -47,7 +47,7 @@ def main():
     parser.add_option("--l_r", type='float', help="learning rate")
     parser.add_option("--l_rs", type='string',
                       help="learning rates for validation",
-                      action=lrs_callback)
+                      action='callback', callback=lrs_callback)
     parser.add_option("--n_samples", type='int',
                       help="train objective samples")
     parser.add_option("--test_b_size", type='int', default=1024,
