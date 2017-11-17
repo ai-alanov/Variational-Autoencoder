@@ -134,7 +134,11 @@ def load_loss(vaes, learning_rates, save_dir, results_dir, loss_name):
         for vae in vaes:
             save_path = os.path.join(save_dir, vae.name(), vae.dataset_name(),
                                      vae.parameters(learning_rate=lr))
-            latest_file = sorted(glob.glob(os.path.join(save_path, '*')))[-1]
+            save_path = os.path.join(save_path, '*')
+            files = glob.glob(os.path.join(save_path, '*'))
+            if not files:
+                files = glob.glob(os.path.join(save_path[:-1], '*'))
+            latest_file = sorted(files)[-1]
             now = os.path.basename(latest_file)
             save_path = os.path.join(save_path, now, results_dir)
             file_name = os.path.join(save_path, loss_name)
