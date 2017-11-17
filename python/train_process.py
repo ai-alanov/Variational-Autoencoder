@@ -238,7 +238,7 @@ def train_model(vaes, vae_params, train_params, val_params, test_params,
 def grid_search_on_validation(sess, vaes, input_x, val_params, config_params):
     learning_rates = config_params['learning_rates']
     save_path = config_params['save_path']
-    val_loss = load_loss(vaes, save_path,
+    val_loss = load_loss(vaes, learning_rates, save_path,
                          config_params['results_dir'], 'val.pkl')
     noncashed_vaes = defaultdict(list)
     for lr in learning_rates:
