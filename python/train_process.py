@@ -118,8 +118,11 @@ def save_vae_weights(vaes, sess, epoch, save_dir):
 
 def restore_vae_weights(vaes, sess, epoch, save_dir, learning_rate):
     for vae in vaes:
+        val_lr = (learning_rate
+                  if isinstance(learning_rate, float)
+                  else learning_rate[vae.name()])
         save_path = os.path.join(save_dir, vae.name(), vae.dataset_name(),
-                                 vae.parameters(learning_rate[vae.name()]))
+                                 vae.parameters(learning_rate=val_lr))
         latest_file = sorted(glob.glob(os.path.join(save_path, '*')))[-1]
         now = os.path.basename(latest_file)
         save_path = os.path.join(save_path, now)
