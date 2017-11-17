@@ -482,7 +482,7 @@ def get_fixed_freyfaces(datasets_dir, validation_size=0, test_size=500):
 
 
 def choose_vaes_and_learning_rates(encoder_distribution, train_obj_samples,
-                                   learning_rate, all_vaes=True):
+                                   all_vaes=True):
     if encoder_distribution == 'gaussian':
         if all_vaes:
             vaes = [VAE, LogDerTrickVAE, NVILVAE, MuPropVAE]  # noqa
