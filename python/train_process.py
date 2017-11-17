@@ -121,7 +121,8 @@ def find_file(vae, save_dir, lr):
                              vae.parameters(learning_rate=lr))
     files = glob.glob(os.path.join(save_path, '*'))
     if not files:
-        files = glob.glob(os.path.join(save_path[:-1], '*'))
+        save_path = save_path[:-1]
+        files = glob.glob(os.path.join(save_path, '*'))
     latest_file = sorted(files)[-1]
     now = os.path.basename(latest_file)
     return save_path, now
