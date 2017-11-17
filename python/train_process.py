@@ -27,13 +27,12 @@ def set_up_cuda_devices(cuda_devices):
         os.environ["CUDA_VISIBLE_DEVICES"] = cuda_devices
 
 
-def set_up_vaes(vaes, common_params, learning_rates):
-    input_x = tf.placeholder(tf.float32, [None, 1, common_params['n_input']])
+def set_up_vaes(vaes, vae_params):
+    input_x = tf.placeholder(tf.float32, [None, 1, vae_params['n_input']])
     input_x = tf.random_uniform(tf.shape(input_x)) <= input_x
     input_x = tf.cast(input_x, tf.float32)
-    common_params['x'] = input_x
-    vaes = [vae(**common_params, learning_rate=learning_rate)
-            for vae, learning_rate in zip(vaes, learning_rates)]
+    vae_params['x'] = input_x
+    vaes = [vae(**vae_params) for vae in vaes]
     return vaes, input_x
 
 
@@ -117,10 +116,10 @@ def save_vae_weights(vaes, sess, epoch, save_dir):
         vae.save_weights(sess, os.path.join(save_path, '{}'.format(epoch + 1)))
 
 
-def restore_vae_weights(vaes, sess, epoch, save_dir):
+def restore_vae_weights(vaes, sess, epoch, save_dir, learning_rate):
     for vae in vaes:
         save_path = os.path.join(save_dir, vae.name(), vae.dataset_name(),
-                                 vae.parameters())
+                                 vae.parameters(learning_rate[vae.name()]))
         latest_file = sorted(glob.glob(os.path.join(save_path, '*')))[-1]
         now = os.path.basename(latest_file)
         save_path = os.path.join(save_path, now)
@@ -129,52 +128,53 @@ def restore_vae_weights(vaes, sess, epoch, save_dir):
         vae.restore_weights(sess, weights_file)
 
 
-def load_loss(vaes, save_dir, results_dir, loss_name):
-    loss = defaultdict(list)
-    for vae in vaes:
-        save_path = os.path.join(save_dir, vae.name(), vae.dataset_name(),
-                                 vae.parameters())
-        latest_file = sorted(glob.glob(os.path.join(save_path, '*')))[-1]
-        now = os.path.basename(latest_file)
-        save_path = os.path.join(save_path, now, results_dir)
-        file_name = os.path.join(save_path, loss_name)
-        if os.path.exists(file_name):
-            with open(file_name, 'rb') as f:
-                loss.update(pickle.load(f))
+def load_loss(vaes, learning_rates, save_dir, results_dir, loss_name):
+    loss = defaultdict(lambda: defaultdict(list))
+    for lr in learning_rates:
+        for vae in vaes:
+            save_path = os.path.join(save_dir, vae.name(), vae.dataset_name(),
+                                     vae.parameters(learning_rate=lr))
+            latest_file = sorted(glob.glob(os.path.join(save_path, '*')))[-1]
+            now = os.path.basename(latest_file)
+            save_path = os.path.join(save_path, now, results_dir)
+            file_name = os.path.join(save_path, loss_name)
+            if os.path.exists(file_name):
+                with open(file_name, 'rb') as f:
+                    loss[str(lr)].update(pickle.load(f))
     return loss
 
 
-def save_loss(vaes, loss, save_dir, results_dir, loss_name, epochs=None):
+def save_loss(vaes, loss, save_dir, results_dir, loss_name,
+              epochs=None, learning_rates=None):
     if 'test_samples' in loss:
         file_name = str(loss['test_samples']) + '-' + vaes[0].dataset_name()
-        file_name += '-' + vaes[0].parameters()
+        file_name += '-' + vaes[0].parameters(without_lr=True)
         other_save_path = os.path.join(
             results_dir, file_name)
         with open(other_save_path, 'wb') as f:
             pickle.dump(loss, f)
-    for vae in vaes:
-        save_path = os.path.join(save_dir, vae.name(), vae.dataset_name(),
-                                 vae.parameters())
-        latest_file = sorted(glob.glob(os.path.join(save_path, '*')))[-1]
-        now = os.path.basename(latest_file)
-        save_path = os.path.join(save_path, now, results_dir)
-        makedirs(save_path)
-        file_name = loss_name
-        if loss_name != 'val.pkl':
-            file_name = now + '_' + loss_name
-        file_name = os.path.join(save_path, file_name)
-        with open(file_name, 'wb') as f:
-            info = {
-                vae.name(): loss[vae.name()]
-            }
-            if epochs:
-                info['best_val_epoch'] = epochs[vae.name()]
-            pickle.dump(info, f)
+    for lr in loss.keys():
+        for vae in vaes:
+            save_path = os.path.join(save_dir, vae.name(), vae.dataset_name(),
+                                     vae.parameters(learning_rate=lr))
+            latest_file = sorted(glob.glob(os.path.join(save_path, '*')))[-1]
+            now = os.path.basename(latest_file)
+            save_path = os.path.join(save_path, now, results_dir)
+            makedirs(save_path)
+            file_name = loss_name
+            if loss_name != 'val.pkl':
+                file_name = now + '_' + loss_name
+            file_name = os.path.join(save_path, file_name)
+            with open(file_name, 'wb') as f:
+                info = {
+                    vae.name(): loss[vae.name()]
+                }
+                pickle.dump(info, f)
 
 
 def run_epoch(vaes, sess, input_x, data, n_samples, batch_size,
               obj_samples, is_train=True, need_to_restore=False,
-              save_path=None, epoch=None):
+              save_path=None, epoch=None, learning_rate=None):
     costs = defaultdict(list)
     n_batches = int(n_samples / batch_size)
     for _ in range(n_batches):
@@ -182,7 +182,7 @@ def run_epoch(vaes, sess, input_x, data, n_samples, batch_size,
         dict_of_tensors = {}
         feed_dict = {input_x: batch_xs}
         if need_to_restore:
-            restore_vae_weights(vaes, sess, epoch, save_path)
+            restore_vae_weights(vaes, sess, epoch, save_path, learning_rate)
         for vae in vaes:
             if is_train:
                 d_tensors, f_dict = vae.partial_fit(n_samples=obj_samples,
@@ -211,7 +211,7 @@ def run_epoch_evaluation(vaes, sess, input_x, test_params, **kwargs):
 def train_model(vaes, vae_params, train_params, val_params, test_params,
                 config_params):
     set_up_cuda_devices(config_params['cuda_devices'])
-    vaes, input_x = set_up_vaes(vaes, **vae_params)
+    vaes, input_x = set_up_vaes(vaes, vae_params)
     sess = set_up_session(vaes, config_params)
     val_loss = defaultdict(list)
     test_loss = defaultdict(list)
@@ -235,37 +235,58 @@ def train_model(vaes, vae_params, train_params, val_params, test_params,
     tf.reset_default_graph()
 
 
-def test_model(vaes, vae_params, test_params, val_params, config_params):
-    set_up_cuda_devices(config_params['cuda_devices'])
-    vaes, input_x = set_up_vaes(vaes, **vae_params)
-    sess = set_up_session(vaes, config_params)
+def grid_search_on_validation(sess, vaes, input_x, val_params, config_params):
+    learning_rates = config_params['learning_rates']
     save_path = config_params['save_path']
     val_loss = load_loss(vaes, save_path,
                          config_params['results_dir'], 'val.pkl')
-    noncashed_vaes = [vae for vae in vaes if not val_loss[vae.name()]]
-    for epoch in tqdm(range(config_params['save_step'],
-                            config_params['n_epochs'],
-                            config_params['save_step'])):
-        val_costs = run_epoch_evaluation(noncashed_vaes, sess,
-                                         input_x, val_params,
-                                         need_to_restore=True,
-                                         save_path=save_path,
-                                         epoch=epoch)
-        for vae in noncashed_vaes:
-            val_loss[vae.name()].append(val_costs[vae.name()])
+    noncashed_vaes = defaultdict(list)
+    for lr in learning_rates:
+        noncashed_vaes[str(lr)] = [vae for vae in vaes
+                                   if not val_loss[str(lr)][vae.name()]]
+    for lr in learning_rates:
+        for epoch in tqdm(range(config_params['save_step'],
+                                config_params['n_epochs'],
+                                config_params['save_step'])):
+            val_costs = run_epoch_evaluation(noncashed_vaes[str(lr)], sess,
+                                             input_x, val_params,
+                                             need_to_restore=True,
+                                             save_path=save_path,
+                                             epoch=epoch, learning_rate=lr)
+            for vae in noncashed_vaes[str(lr)]:
+                val_loss[str(lr)][vae.name()].append(val_costs[vae.name()])
     save_loss(vaes, val_loss, save_path,
               config_params['results_dir'], 'val.pkl')
-    test_min_epochs = defaultdict(int)
-    for vae in vaes:
-        n_steps = np.argmin(val_loss[vae.name()]) + 1
-        test_min_epochs[vae.name()] = n_steps * config_params['save_step']
-    test_loss = run_epoch_evaluation(vaes, sess, input_x, test_params,
-                                     need_to_restore=True, save_path=save_path,
-                                     epoch=test_min_epochs)
+    min_loss = defaultdict(lambda: (np.inf, (None, None)))
+    for lr in val_loss.keys():
+        for vae in vaes:
+            n_steps = np.argmin(val_loss[str(lr)][vae.name()])
+            min_loss_value = val_loss[str(lr)][vae.name()][n_steps]
+            if min_loss_value < min_loss[vae.name()][0]:
+                min_loss[vae.name()] = (min_loss_value, (n_steps, lr))
+    optimal_epochs = {vae.name(): min_loss[vae.name()][1][0] for vae in vaes}
+    optimal_lrs = {vae.name(): min_loss[vae.name()][1][1] for vae in vaes}
+    return optimal_epochs, optimal_lrs
+
+
+def test_model(vaes, vae_params, test_params, val_params, config_params):
+    set_up_cuda_devices(config_params['cuda_devices'])
+    vaes, input_x = set_up_vaes(vaes, vae_params)
+    sess = set_up_session(vaes, config_params)
+    epochs, learning_rates = grid_search_on_validation(
+        sess, vaes, input_x, val_params, config_params)
+    save_path = config_params['save_path']
+    test_loss = run_epoch_evaluation(
+        vaes, sess, input_x, test_params, need_to_restore=True,
+        save_path=save_path, epoch=epochs, learning_rates=learning_rates)
     test_loss['test_samples'] = test_params['obj_samples']
+    test_loss = {
+        name: (test_loss[name], (epochs[name], learning_rates[name]))
+        for name in map(lambda x: x.name(), vaes)
+    }
     save_loss(vaes, test_loss, save_path, config_params['results_dir'],
               'Test-m{}.pkl'.format(test_params['obj_samples']),
-              test_min_epochs)
+              epochs, learning_rates)
     sess.close()
     tf.reset_default_graph()
 
@@ -289,7 +310,7 @@ def calculate_stds(vaes, batch_xs, n_epochs, save_step, save_path,
 def consider_stds(vaes, vae_params, data, n_epochs, batch_size, n_iterations,
                   save_step, save_path, cuda_devices):
     set_up_cuda_devices('cuda_devices')
-    vaes = set_up_vaes(vaes, **vae_params)
+    vaes = set_up_vaes(vaes, vae_params)
     batch_xs = get_batch(data, batch_size)
 
     encoder_stds = calculate_stds(vaes, batch_xs, n_epochs, save_step,
@@ -474,8 +495,7 @@ def choose_vaes_and_learning_rates(encoder_distribution, train_obj_samples,
             vaes = [GumbelSoftmaxTrickVAE]  # noqa
     if train_obj_samples > 1:
         vaes.append(VIMCOVAE)  # noqa
-    learning_rates = [learning_rate] * len(vaes)
-    return vaes, learning_rates
+    return vaes
 
 
 def setup_vaes_and_params(X_train, X_val, X_test, dataset, n_z, n_ary,
@@ -485,7 +505,7 @@ def setup_vaes_and_params(X_train, X_val, X_test, dataset, n_z, n_ary,
                           cuda_devices, save_step, n_epochs=3001,
                           save_weights=True, mem_fraction=0.333, all_vaes=True,
                           mode='train', results_dir=None,
-                          logging_path='logging.txt'):
+                          logging_path='logging.txt', learning_rates=None):
     n_input = X_train.images.shape[1]
     n_hidden = 200
     network_architecture = {
@@ -531,25 +551,23 @@ def setup_vaes_and_params(X_train, X_val, X_test, dataset, n_z, n_ary,
         'cuda_devices': cuda_devices,
         'mem_fraction': mem_fraction,
         'results_dir': results_dir,
-        'logging_path': logging_path
+        'logging_path': logging_path,
+        'learning_rates': learning_rates
     }
     vae_params = {
-        'common_params': {
-            'dataset': dataset,
-            'n_input': n_input,
-            'n_z': n_z,
-            'n_ary': n_ary,
-            'n_samples': train_params['obj_samples'],
-            'encoder_distribution': encoder_distribution,
-            'network_architecture': network_architecture
-        }
+        'dataset': dataset,
+        'n_input': n_input,
+        'n_z': n_z,
+        'n_ary': n_ary,
+        'n_samples': train_params['obj_samples'],
+        'encoder_distribution': encoder_distribution,
+        'network_architecture': network_architecture,
+        'learning_rate': learning_rate or learning_rates[0]
     }
 
-    vaes, learning_rates = choose_vaes_and_learning_rates(encoder_distribution,
-                                                          train_obj_samples,
-                                                          learning_rate,
-                                                          all_vaes=all_vaes)
-    vae_params['learning_rates'] = learning_rates
+    vaes = choose_vaes_and_learning_rates(encoder_distribution,
+                                          train_obj_samples,
+                                          all_vaes=all_vaes)
 
     input_vaes_and_params = {
         'vaes': vaes,
