@@ -116,15 +116,23 @@ def save_vae_weights(vaes, sess, epoch, save_dir):
         vae.save_weights(sess, os.path.join(save_path, '{}'.format(epoch + 1)))
 
 
+def find_file(vae, save_dir, lr):
+    save_path = os.path.join(save_dir, vae.name(), vae.dataset_name(),
+                             vae.parameters(learning_rate=lr))
+    files = glob.glob(os.path.join(save_path, '*'))
+    if not files:
+        files = glob.glob(os.path.join(save_path[:-1], '*'))
+    latest_file = sorted(files)[-1]
+    now = os.path.basename(latest_file)
+    return save_path, now
+
+
 def restore_vae_weights(vaes, sess, epoch, save_dir, learning_rate):
     for vae in vaes:
         val_lr = (learning_rate
                   if isinstance(learning_rate, float)
                   else learning_rate[vae.name()])
-        save_path = os.path.join(save_dir, vae.name(), vae.dataset_name(),
-                                 vae.parameters(learning_rate=val_lr))
-        latest_file = sorted(glob.glob(os.path.join(save_path, '*')))[-1]
-        now = os.path.basename(latest_file)
+        save_path, now = find_file(vae, save_dir, val_lr)
         save_path = os.path.join(save_path, now)
         vae_epoch = epoch if isinstance(epoch, int) else epoch[vae.name()]
         weights_file = os.path.join(save_path, '{}'.format(vae_epoch + 1))
@@ -135,13 +143,7 @@ def load_loss(vaes, learning_rates, save_dir, results_dir, loss_name):
     loss = defaultdict(lambda: defaultdict(list))
     for lr in learning_rates:
         for vae in vaes:
-            save_path = os.path.join(save_dir, vae.name(), vae.dataset_name(),
-                                     vae.parameters(learning_rate=lr))
-            files = glob.glob(os.path.join(save_path, '*'))
-            if not files:
-                files = glob.glob(os.path.join(save_path[:-1], '*'))
-            latest_file = sorted(files)[-1]
-            now = os.path.basename(latest_file)
+            save_path, now = find_file(vae, save_dir, lr)
             save_path = os.path.join(save_path, now, results_dir)
             file_name = os.path.join(save_path, loss_name)
             if os.path.exists(file_name):
