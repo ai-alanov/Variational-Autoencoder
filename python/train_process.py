@@ -182,8 +182,6 @@ def save_loss(vaes, loss, save_dir, results_dir, loss_name,
                 save_path = os.path.join(save_path, now, results_dir)
                 makedirs(save_path)
                 file_name = loss_name
-                if loss_name != 'val.pkl':
-                    file_name = now + '_' + loss_name
                 file_name = os.path.join(save_path, file_name)
                 with open(file_name, 'wb') as f:
                     info = {
@@ -300,11 +298,11 @@ def test_model(vaes, vae_params, test_params, val_params, config_params):
     test_loss = run_epoch_evaluation(
         vaes, sess, input_x, test_params, need_to_restore=True,
         save_path=save_path, epoch=epochs, learning_rate=learning_rates)
-    test_loss['test_samples'] = test_params['obj_samples']
     test_loss = {
         name: (test_loss[name], (epochs[name], learning_rates[name]))
         for name in map(lambda x: x.name(), vaes)
     }
+    test_loss['test_samples'] = test_params['obj_samples']
     save_loss(vaes, test_loss, save_path, config_params['results_dir'],
               'Test-m{}.pkl'.format(test_params['obj_samples']),
               epochs, learning_rates)
