@@ -195,12 +195,12 @@ def run_epoch(vaes, sess, input_x, data, n_samples, batch_size,
               save_path=None, epoch=None, learning_rate=None):
     costs = defaultdict(list)
     n_batches = int(n_samples / batch_size)
+    if need_to_restore:
+        restore_vae_weights(vaes, sess, epoch, save_path, learning_rate)
     for _ in range(n_batches):
         batch_xs = get_batch(data, batch_size)
         dict_of_tensors = {}
         feed_dict = {input_x: batch_xs}
-        if need_to_restore:
-            restore_vae_weights(vaes, sess, epoch, save_path, learning_rate)
         for vae in vaes:
             if is_train:
                 d_tensors, f_dict = vae.partial_fit(n_samples=obj_samples,
@@ -263,8 +263,7 @@ def grid_search_on_validation(sess, vaes, input_x, val_params, config_params):
         noncashed_vaes[str(lr)] = [vae for vae in vaes
                                    if not val_loss[str(lr)][vae.name()]]
     for lr in learning_rates:
-        for epoch in tqdm(range(config_params['save_step'],
-                                config_params['n_epochs'],
+        for epoch in tqdm(range(0, config_params['n_epochs'],
                                 config_params['save_step'])):
             val_costs = run_epoch_evaluation(noncashed_vaes[str(lr)], sess,
                                              input_x, val_params,
@@ -278,9 +277,9 @@ def grid_search_on_validation(sess, vaes, input_x, val_params, config_params):
     min_loss = defaultdict(lambda: (np.inf, (None, None)))
     for lr in val_loss.keys():
         for vae in vaes:
-            n_steps = np.argmin(val_loss[str(lr)][vae.name()])
+            n_steps = np.nanargmin(val_loss[str(lr)][vae.name()])
             min_loss_value = val_loss[str(lr)][vae.name()][n_steps]
-            n_steps = (n_steps + 1) * config_params['save_step']
+            n_steps *= config_params['save_step']
             if min_loss_value < min_loss[vae.name()][0]:
                 min_loss[vae.name()] = (min_loss_value, (n_steps, float(lr)))
     optimal_epochs = {vae.name(): min_loss[vae.name()][1][0] for vae in vaes}
