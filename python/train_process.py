@@ -162,20 +162,34 @@ def save_loss(vaes, loss, save_dir, results_dir, loss_name,
             results_dir, file_name)
         with open(other_save_path, 'wb') as f:
             pickle.dump(loss, f)
-    for lr in list(loss.keys()):
         for vae in vaes:
-            save_path, now = find_file(vae, save_dir, float(lr))
+            lr = learning_rates[vae.name()]
+            save_path, now = find_file(vae, save_dir, lr)
             save_path = os.path.join(save_path, now, results_dir)
             makedirs(save_path)
-            file_name = loss_name
-            if loss_name != 'val.pkl':
-                file_name = now + '_' + loss_name
+            file_name = now + '_' + loss_name
             file_name = os.path.join(save_path, file_name)
             with open(file_name, 'wb') as f:
                 info = {
-                    vae.name(): loss[lr]
+                    vae.name(): loss[vae.name()],
+                    'best_epoch': epochs[vae.name()]
                 }
                 pickle.dump(info, f)
+    else:
+        for lr in list(loss.keys()):
+            for vae in vaes:
+                save_path, now = find_file(vae, save_dir, float(lr))
+                save_path = os.path.join(save_path, now, results_dir)
+                makedirs(save_path)
+                file_name = loss_name
+                if loss_name != 'val.pkl':
+                    file_name = now + '_' + loss_name
+                file_name = os.path.join(save_path, file_name)
+                with open(file_name, 'wb') as f:
+                    info = {
+                        vae.name(): loss[lr]
+                    }
+                    pickle.dump(info, f)
 
 
 def run_epoch(vaes, sess, input_x, data, n_samples, batch_size,
