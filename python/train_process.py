@@ -268,6 +268,7 @@ def grid_search_on_validation(sess, vaes, input_x, val_params, config_params):
         for vae in vaes:
             n_steps = np.argmin(val_loss[str(lr)][vae.name()])
             min_loss_value = val_loss[str(lr)][vae.name()][n_steps]
+            n_steps = (n_steps + 1) * config_params['save_step']
             if min_loss_value < min_loss[vae.name()][0]:
                 min_loss[vae.name()] = (min_loss_value, (n_steps, float(lr)))
     optimal_epochs = {vae.name(): min_loss[vae.name()][1][0] for vae in vaes}
