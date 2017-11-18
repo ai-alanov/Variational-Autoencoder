@@ -245,7 +245,7 @@ def grid_search_on_validation(sess, vaes, input_x, val_params, config_params):
     learning_rates = config_params['learning_rates']
     save_path = config_params['save_path']
     val_loss = load_loss(vaes, learning_rates, save_path,
-                         config_params['results_dir'], 'val.pkl')
+                         config_params['results_dir'], 'val_other.pkl')
     noncashed_vaes = defaultdict(list)
     for lr in learning_rates:
         noncashed_vaes[str(lr)] = [vae for vae in vaes
@@ -269,7 +269,7 @@ def grid_search_on_validation(sess, vaes, input_x, val_params, config_params):
             n_steps = np.argmin(val_loss[str(lr)][vae.name()])
             min_loss_value = val_loss[str(lr)][vae.name()][n_steps]
             if min_loss_value < min_loss[vae.name()][0]:
-                min_loss[vae.name()] = (min_loss_value, (n_steps, lr))
+                min_loss[vae.name()] = (min_loss_value, (n_steps, float(lr)))
     optimal_epochs = {vae.name(): min_loss[vae.name()][1][0] for vae in vaes}
     optimal_lrs = {vae.name(): min_loss[vae.name()][1][1] for vae in vaes}
     return optimal_epochs, optimal_lrs
