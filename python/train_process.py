@@ -149,7 +149,7 @@ def load_loss(vaes, learning_rates, save_dir, results_dir, loss_name):
             file_name = os.path.join(save_path, loss_name)
             if os.path.exists(file_name):
                 with open(file_name, 'rb') as f:
-                    loss.update(pickle.load(f))
+                    loss[str(lr)].update(pickle.load(f))
     return loss
 
 
@@ -185,7 +185,7 @@ def save_loss(vaes, loss, save_dir, results_dir, loss_name,
                 file_name = os.path.join(save_path, file_name)
                 with open(file_name, 'wb') as f:
                     info = {
-                        vae.name(): loss[lr]
+                        vae.name(): loss[lr][vae.name()]
                     }
                     pickle.dump(info, f)
 
