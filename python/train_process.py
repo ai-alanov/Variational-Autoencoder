@@ -512,7 +512,8 @@ def choose_vaes_and_learning_rates(encoder_distribution, train_obj_samples,
     if (train_obj_samples > 1) and ((vaes_to_choose == 'all')
                                     or ('VIMCOVAE' in vaes_to_choose)):
         vaes.append(VIMCOVAE)  # noqa
-        vaes_to_choose.remove('VIMCOVAE')
+        if vaes_to_choose != 'all':
+            vaes_to_choose.remove('VIMCOVAE')
     if encoder_distribution == 'gaussian':
         if vaes_to_choose == 'all':
             vaes += [VAE, LogDerTrickVAE, NVILVAE, MuPropVAE]  # noqa
