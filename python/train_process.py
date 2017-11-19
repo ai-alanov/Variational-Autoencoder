@@ -500,18 +500,26 @@ def get_fixed_freyfaces(datasets_dir, validation_size=0, test_size=500):
 
 
 def choose_vaes_and_learning_rates(encoder_distribution, train_obj_samples,
-                                   all_vaes=True):
+                                   vaes_to_choose='all'):
+    name_to_vae = {
+        'VAE': VAE,  # noqa
+        'LogDerTrickVAE': LogDerTrickVAE,  # noqa
+        'NVILVAE': NVILVAE,  # noqa
+        'MuPropVAE': MuPropVAE,  # noqa
+        'GumbelSoftmaxTrickVAE': GumbelSoftmaxTrickVAE  # noqa
+    }
     if encoder_distribution == 'gaussian':
-        if all_vaes:
+        if vaes_to_choose == 'all':
             vaes = [VAE, LogDerTrickVAE, NVILVAE, MuPropVAE]  # noqa
         else:
-            vaes = [VAE, LogDerTrickVAE, NVILVAE, MuPropVAE]  # noqa
+            vaes = [name_to_vae[name] for name in vaes_to_choose]
     elif encoder_distribution == 'multinomial':
-        if all_vaes:
+        if vaes_to_choose == 'all':
             vaes = [LogDerTrickVAE, NVILVAE, MuPropVAE, GumbelSoftmaxTrickVAE]  # noqa
         else:
-            vaes = [GumbelSoftmaxTrickVAE]  # noqa
-    if train_obj_samples > 1:
+            vaes = [name_to_vae[name] for name in vaes_to_choose]
+    if (train_obj_samples > 1) and ((vaes_to_choose == 'all')
+                                    or ('VIMCOVAE' in vaes_to_choose)):
         vaes.append(VIMCOVAE)  # noqa
     return vaes
 
@@ -523,7 +531,8 @@ def setup_vaes_and_params(X_train, X_val, X_test, dataset, n_z, n_ary,
                           cuda_devices, save_step, n_epochs=3001,
                           save_weights=True, mem_fraction=0.333, all_vaes=True,
                           mode='train', results_dir=None,
-                          logging_path='logging.txt', learning_rates=None):
+                          logging_path='logging.txt', learning_rates=None,
+                          vaes_to_choose='all'):
     n_input = X_train.images.shape[1]
     n_hidden = 200
     network_architecture = {
@@ -585,7 +594,7 @@ def setup_vaes_and_params(X_train, X_val, X_test, dataset, n_z, n_ary,
 
     vaes = choose_vaes_and_learning_rates(encoder_distribution,
                                           train_obj_samples,
-                                          all_vaes=all_vaes)
+                                          vaes_to_choose=vaes_to_choose)
 
     input_vaes_and_params = {
         'vaes': vaes,
