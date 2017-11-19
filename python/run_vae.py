@@ -107,7 +107,7 @@ def main():
         'results_dir': 'test_results',
         'logging_path': logging_path,
         'learning_rates': options.l_rs,
-        'vaes': options.vaes
+        'vaes_to_choose': options.vaes
     }
     if options.mode == 'train':
         train_model(**setup_vaes_and_params(**params))
