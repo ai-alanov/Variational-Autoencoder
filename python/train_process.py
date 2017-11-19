@@ -508,19 +508,21 @@ def choose_vaes_and_learning_rates(encoder_distribution, train_obj_samples,
         'MuPropVAE': MuPropVAE,  # noqa
         'GumbelSoftmaxTrickVAE': GumbelSoftmaxTrickVAE  # noqa
     }
-    if encoder_distribution == 'gaussian':
-        if vaes_to_choose == 'all':
-            vaes = [VAE, LogDerTrickVAE, NVILVAE, MuPropVAE]  # noqa
-        else:
-            vaes = [name_to_vae[name] for name in vaes_to_choose]
-    elif encoder_distribution == 'multinomial':
-        if vaes_to_choose == 'all':
-            vaes = [LogDerTrickVAE, NVILVAE, MuPropVAE, GumbelSoftmaxTrickVAE]  # noqa
-        else:
-            vaes = [name_to_vae[name] for name in vaes_to_choose]
+    vaes = []
     if (train_obj_samples > 1) and ((vaes_to_choose == 'all')
                                     or ('VIMCOVAE' in vaes_to_choose)):
         vaes.append(VIMCOVAE)  # noqa
+        vaes_to_choose.remove('VIMCOVAE')
+    if encoder_distribution == 'gaussian':
+        if vaes_to_choose == 'all':
+            vaes += [VAE, LogDerTrickVAE, NVILVAE, MuPropVAE]  # noqa
+        else:
+            vaes += [name_to_vae[name] for name in vaes_to_choose]
+    elif encoder_distribution == 'multinomial':
+        if vaes_to_choose == 'all':
+            vaes += [LogDerTrickVAE, NVILVAE, MuPropVAE, GumbelSoftmaxTrickVAE]  # noqa
+        else:
+            vaes += [name_to_vae[name] for name in vaes_to_choose]
     return vaes
 
 
