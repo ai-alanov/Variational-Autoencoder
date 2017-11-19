@@ -38,6 +38,10 @@ def lrs_callback(option, opt, value, parser):
     setattr(parser.values, option.dest, list(map(float, value.split(','))))
 
 
+def vaes_callback(option, opt, value, parser):
+    setattr(parser.values, option.dest, value.split(','))
+
+
 def main():
     parser = OptionParser(usage="usage: %prog [options]",
                           version="%prog 1.0")
@@ -61,6 +65,9 @@ def main():
                       help='dataset name')
     parser.add_option("--mode", type='string', default='train',
                       help='train or test')
+    parser.add_option("--vaes", type='string', default='all',
+                      help="vaes of training or testing",
+                      action='callback', callback=vaes_callback)
     (options, args) = parser.parse_args()
     options_to_str = ['{}{}'.format(k, v) for k, v in vars(options).items()]
     logging_file = '-'.join(sorted(options_to_str))
@@ -99,7 +106,8 @@ def main():
         'mode': options.mode,
         'results_dir': 'test_results',
         'logging_path': logging_path,
-        'learning_rates': options.l_rs
+        'learning_rates': options.l_rs,
+        'vaes': options.vaes
     }
     if options.mode == 'train':
         train_model(**setup_vaes_and_params(**params))
