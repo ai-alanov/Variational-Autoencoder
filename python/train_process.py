@@ -345,7 +345,7 @@ def calculate_stds2(vaes, sess, input_x, batch_xs, config_params,
         for vae in vaes:
             if vae.name() == 'NVILVAE' and weights_name != 'NVILVAE':
                 continue
-            for saved_index in range(1, config_params['n_epochs'] + 1,
+            for saved_index in range(0, config_params['n_epochs'],
                                      config_params['save_step']):
                 weights_file = restore_weights_file(
                     weights[weights_name], saved_index,
