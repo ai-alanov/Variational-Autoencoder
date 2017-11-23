@@ -257,20 +257,23 @@ class VAE(object):
                                   feed_dict={
                                       self.x: X,
                                       self.learning_rate: learning_rate,
-                                      self.n_samples: n_samples})
+                                      self.n_samples: n_samples,
+                                      self.is_train: 0})
         flat_gradients = np.array([])
         for grad in gradients:
             flat_gradients = np.append(flat_gradients, grad[0].flatten())
         return flat_gradients
 
-    def get_encoder_gradients(self, X, learning_rate=None, n_samples=None):
+    def get_encoder_gradients(self, sess, input_x, X, learning_rate=None,
+                              n_samples=None):
         learning_rate = learning_rate or self.learning_rate_value
         n_samples = n_samples or self.n_samples_value
-        gradients = self.sess.run(self.encoder_gradients,
-                                  feed_dict={
-                                      self.x: X,
-                                      self.learning_rate: learning_rate,
-                                      self.n_samples: n_samples})
+        gradients = sess.run(self.encoder_gradients,
+                             feed_dict={
+                                 input_x: X,
+                                 self.learning_rate: learning_rate,
+                                 self.n_samples: n_samples,
+                                 self.is_train: 0})
         flat_gradients = np.array([])
         for grad in gradients:
             flat_gradients = np.append(flat_gradients, grad[0].flatten())
