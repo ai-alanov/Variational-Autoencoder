@@ -14,7 +14,7 @@ import seaborn as sns  # noqa
 
 sys.path.append('../python/')
 from utils import makedirs  # noqa
-from train_process import train_model, test_model  # noqa
+from train_process import train_model, test_model, plot_stds  # noqa
 from train_process import get_fixed_mnist, get_fixed_omniglot  # noqa
 from train_process import setup_vaes_and_params  # noqa
 
@@ -38,7 +38,7 @@ def lrs_callback(option, opt, value, parser):
     setattr(parser.values, option.dest, list(map(float, value.split(','))))
 
 
-def vaes_callback(option, opt, value, parser):
+def split_by_comma_callback(option, opt, value, parser):
     setattr(parser.values, option.dest, value.split(','))
 
 
@@ -67,7 +67,16 @@ def main():
                       help='train or test')
     parser.add_option("--vaes", type='string', default='all',
                       help="vaes of training or testing",
-                      action='callback', callback=vaes_callback)
+                      action='callback', callback=split_by_comma_callback)
+    parser.add_option("--n_iters", type='int', default=10,
+                      help="number of iterations for gradient std estimation")
+    parser.add_option("--save_step", type='int', default=100,
+                      help="step of saving weights")
+    parser.add_option("--weights", type='string', default=None,
+                      help="weight names for plot stds", action='callback',
+                      callback=split_by_comma_callback)
+    parser.add_option("--n_epochs", type='int', default=3001,
+                      help="number of training epochs")
     (options, args) = parser.parse_args()
     options_to_str = ['{}{}'.format(k, v) for k, v in vars(options).items()]
     logging_file = '-'.join(sorted(options_to_str))
@@ -98,21 +107,24 @@ def main():
         'test_batch_size': options.test_b_size,
         'test_obj_samples': options.test_n_samples,
         'cuda_devices': options.c_devs,
-        'save_step': 100,
-        'n_epochs': 3001,
+        'save_step': options.save_step,
+        'n_epochs': options.n_epochs,
         'save_weights': True,
         'mem_fraction': options.mem_frac,
-        'all_vaes': True,
         'mode': options.mode,
         'results_dir': 'test_results',
         'logging_path': logging_path,
         'learning_rates': options.l_rs,
-        'vaes_to_choose': options.vaes
+        'vaes_to_choose': options.vaes,
+        'n_iterations': options.n_iters,
+        'weights': options.weights
     }
     if options.mode == 'train':
         train_model(**setup_vaes_and_params(**params))
-    else:
+    elif options.mode == 'test':
         test_model(**setup_vaes_and_params(**params))
+    elif options.mode == 'visualize':
+        plot_stds(**setup_vaes_and_params(**params))
 
 
 if __name__ == '__main__':
