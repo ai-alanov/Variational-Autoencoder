@@ -128,15 +128,28 @@ def find_file(vae, save_dir, lr):
     return save_path, now
 
 
+def restore_weights_file(vae, epoch, save_dir, learning_rate):
+    if isinstance(learning_rate, float):
+        val_lr = learning_rate
+    elif isinstance(learning_rate, list):
+        val_lr = learning_rate[0]
+    elif isinstance(learning_rate, dict):
+        val_lr = learning_rate[vae.name()]
+    else:
+        error_message = 'Unsupported type of learning_rate: {}'
+        error_message = error_message.format(type(learning_rate))
+        raise ValueError(error_message)
+    save_path, now = find_file(vae, save_dir, val_lr)
+    save_path = os.path.join(save_path, now)
+    vae_epoch = epoch if isinstance(epoch, int) else epoch[vae.name()]
+    weights_file = os.path.join(save_path, '{}'.format(vae_epoch + 1))
+    return weights_file
+
+
 def restore_vae_weights(vaes, sess, epoch, save_dir, learning_rate):
     for vae in vaes:
-        val_lr = (learning_rate
-                  if isinstance(learning_rate, float)
-                  else learning_rate[vae.name()])
-        save_path, now = find_file(vae, save_dir, val_lr)
-        save_path = os.path.join(save_path, now)
-        vae_epoch = epoch if isinstance(epoch, int) else epoch[vae.name()]
-        weights_file = os.path.join(save_path, '{}'.format(vae_epoch + 1))
+        weights_file = restore_weights_file(vae, epoch, save_dir,
+                                            learning_rate)
         vae.restore_weights(sess, weights_file)
 
 
@@ -323,6 +336,65 @@ def calculate_stds(vaes, batch_xs, n_epochs, save_step, save_path,
                                                    n_iterations, vae_part)
                 stds[weights_name][vae.name()].append(std)
     return stds
+
+
+def calculate_stds2(vaes, sess, input_x, batch_xs, config_params,
+                    vae_part, weights):
+    stds = defaultdict(lambda: defaultdict(list))
+    for weights_name in weights:
+        for vae in vaes:
+            if vae.name() == 'NVILVAE' and weights_name != 'NVILVAE':
+                continue
+            for saved_index in range(1, config_params['n_epochs'] + 1,
+                                     config_params['save_step']):
+                weights_file = restore_weights_file(
+                    weights[weights_name], saved_index,
+                    config_params['save_path'],
+                    config_params['learning_rates'])
+                vae.restore_weights(sess, weights_file)
+                _, std = get_gradient_mean_and_std(
+                    vae, sess, input_x, batch_xs,
+                    config_params['n_iterations'], vae_part)
+                stds[weights_name][vae.name()].append(std)
+    return stds
+
+
+def plot_stds(vaes, vae_params, train_params, config_params):
+    set_up_cuda_devices(config_params['cuda_devices'])
+    vaes, input_x = set_up_vaes(vaes, vae_params)
+    sess = set_up_session(vaes, config_params)
+    batch_xs = get_batch(train_params['data'], train_params['batch_size'])
+    all_weights = {vae.name(): vae for vae in vaes}
+    weights = config_params['weights']
+    weights = {w: all_weights[w] for w in weights} if weights else all_weights
+
+    encoder_stds = calculate_stds2(vaes, sess, input_x, batch_xs,
+                                   config_params, 'encoder', weights)
+
+    sess.close()
+    tf.reset_default_graph()
+
+    n_weights = len(weights)
+    weights_range = np.arange(1, config_params['n_epochs'] + 1,
+                              config_params['save_step'])
+
+    fig, axes = plt.subplots(n_weights, 1, figsize=(8, 6))
+    for idx, weights_name in enumerate(weights):
+        ax = axes[idx][0] if n_weights > 1 else axes
+        for name in map(lambda x: x.name(), vaes):
+            if name == 'NVILVAE' and weights_name != 'NVILVAE':
+                continue
+            ax.plot(weights_range,
+                    np.log10(encoder_stds[weights_name][name]),
+                    label='{} encoder log-std'.format(name))
+        title = '{} log-std, {} weights'
+        ax.set_title(title.format('Encoder', weights_name))
+        ax.set_xlabel('epoch')
+        ax.set_ylabel('log-std')
+        ax.legend(loc='best')
+    plt.tight_layout()
+    plt.savefig('test.pdf')
+    plt.show()
 
 
 def consider_stds(vaes, vae_params, data, n_epochs, batch_size, n_iterations,
@@ -535,7 +607,7 @@ def setup_vaes_and_params(X_train, X_val, X_test, dataset, n_z, n_ary,
                           save_weights=True, mem_fraction=0.333, all_vaes=True,
                           mode='train', results_dir=None,
                           logging_path='logging.txt', learning_rates=None,
-                          vaes_to_choose='all'):
+                          vaes_to_choose='all', n_iterations=10, weights=None):
     n_input = X_train.images.shape[1]
     n_hidden = 200
     network_architecture = {
@@ -582,7 +654,9 @@ def setup_vaes_and_params(X_train, X_val, X_test, dataset, n_z, n_ary,
         'mem_fraction': mem_fraction,
         'results_dir': results_dir,
         'logging_path': logging_path,
-        'learning_rates': learning_rates
+        'learning_rates': learning_rates,
+        'n_iterations': n_iterations,
+        'weights': weights
     }
     vae_params = {
         'dataset': dataset,
@@ -609,4 +683,7 @@ def setup_vaes_and_params(X_train, X_val, X_test, dataset, n_z, n_ary,
     }
     if mode == 'test':
         input_vaes_and_params.pop('train_params')
+    elif mode == 'visualize':
+        input_vaes_and_params.pop('val_params')
+        input_vaes_and_params.pop('test_params')
     return input_vaes_and_params
