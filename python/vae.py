@@ -273,7 +273,7 @@ class VAE(object):
                                  input_x: X,
                                  self.learning_rate: learning_rate,
                                  self.n_samples: n_samples,
-                                 self.is_train: 0})
+                                 self.is_train: 1})
         flat_gradients = np.array([])
         for grad in gradients:
             flat_gradients = np.append(flat_gradients, grad[0].flatten())
