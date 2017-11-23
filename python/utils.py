@@ -125,13 +125,14 @@ def compute_multisample_elbo(log_density, kl_divergency, is_vimco=False,
         return multisample_elbo
 
 
-def get_gradient_mean_and_std(vae, batch_xs, n_iterations, gradient_type):
+def get_gradient_mean_and_std(vae, sess, input_x, batch_xs, n_iterations,
+                              gradient_type):
     gradients = []
     for _ in range(n_iterations):
         if gradient_type == 'decoder':
-            gradient = vae.get_decoder_gradients(batch_xs)
+            gradient = vae.get_decoder_gradients(sess, input_x, batch_xs)
         elif gradient_type == 'encoder':
-            gradient = vae.get_encoder_gradients(batch_xs)
+            gradient = vae.get_encoder_gradients(sess, input_x, batch_xs)
         gradients.append(gradient)
     gradients = np.array(gradients)
     gradient_std = np.linalg.norm(gradients - gradients.mean(axis=0))
