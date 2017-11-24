@@ -348,12 +348,11 @@ def calculate_stds2(vaes, sess, input_x, batch_xs, config_params,
                 vae, saved_index,
                 config_params['save_path'],
                 config_params['learning_rates'])
-            print(weights_file)
             vae.restore_weights(sess, weights_file)
             _, std = get_gradient_mean_and_std(
                 vae, sess, input_x, batch_xs,
                 config_params['n_iterations'], vae_part)
-            stds[vae.name()].append(std)
+            stds[vae.name()].append(min(1e4, std))
     return stds
 
 
