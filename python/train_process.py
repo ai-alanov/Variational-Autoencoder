@@ -340,22 +340,20 @@ def calculate_stds(vaes, batch_xs, n_epochs, save_step, save_path,
 
 def calculate_stds2(vaes, sess, input_x, batch_xs, config_params,
                     vae_part, weights):
-    stds = defaultdict(lambda: defaultdict(list))
-    for weights_name in weights:
-        for vae in tqdm(vaes):
-            if vae.name() == 'NVILVAE' and weights_name != 'NVILVAE':
-                continue
-            for saved_index in tqdm(range(0, config_params['n_epochs'],
-                                          config_params['save_step'])):
-                weights_file = restore_weights_file(
-                    weights[weights_name], saved_index,
-                    config_params['save_path'],
-                    config_params['learning_rates'])
-                vae.restore_weights(sess, weights_file)
-                _, std = get_gradient_mean_and_std(
-                    vae, sess, input_x, batch_xs,
-                    config_params['n_iterations'], vae_part)
-                stds[weights_name][vae.name()].append(std)
+    stds = defaultdict(list)
+    for vae in tqdm(vaes):
+        for saved_index in tqdm(range(0, config_params['n_epochs'],
+                                      config_params['save_step'])):
+            weights_file = restore_weights_file(
+                vae, saved_index,
+                config_params['save_path'],
+                config_params['learning_rates'])
+            print(weights_file)
+            vae.restore_weights(sess, weights_file)
+            _, std = get_gradient_mean_and_std(
+                vae, sess, input_x, batch_xs,
+                config_params['n_iterations'], vae_part)
+            stds[vae.name()].append(std)
     return stds
 
 
@@ -379,19 +377,16 @@ def plot_stds(vaes, vae_params, train_params, config_params):
                               config_params['save_step'])
 
     fig, axes = plt.subplots(n_weights, 1, figsize=(8, 6))
-    for idx, weights_name in enumerate(weights):
+    for idx, name in enumerate(map(lambda x: x.name(), vaes)):
         ax = axes[idx][0] if n_weights > 1 else axes
-        for name in map(lambda x: x.name(), vaes):
-            if name == 'NVILVAE' and weights_name != 'NVILVAE':
-                continue
-            ax.plot(weights_range,
-                    np.log10(encoder_stds[weights_name][name]),
-                    label='{} encoder log-std'.format(name))
-        title = '{} log-std, {} weights'
-        ax.set_title(title.format('Encoder', weights_name))
-        ax.set_xlabel('epoch')
-        ax.set_ylabel('log-std')
-        ax.legend(loc='best')
+        ax.plot(weights_range,
+                np.log10(encoder_stds[name]),
+                label='{} encoder log-std'.format(name))
+    title = '{} log-std'
+    ax.set_title(title.format('Encoder'))
+    ax.set_xlabel('epoch')
+    ax.set_ylabel('log-std')
+    ax.legend(loc='best')
     plt.tight_layout()
     plt.savefig('test.pdf')
     plt.show()
