@@ -375,15 +375,20 @@ def plot_stds(vaes, vae_params, train_params, config_params):
     n_weights = len(weights)
     weights_range = np.arange(1, config_params['n_epochs'] + 1,
                               config_params['save_step'])
-
+    names = {
+        'ReparamTrickVAE': 'RGrad',
+        'VIMCOVAE': 'VIMCO',
+        'LogDerTrickVAE': 'ScoreFunc',
+        'NVILVAE': 'NVIL',
+        'MuPropVAE': 'MuProp',
+        'GumbelSoftmaxTrickVAE': 'GSoft'
+    }
     fig, axes = plt.subplots(n_weights, 1, figsize=(8, 6))
     for idx, name in enumerate(map(lambda x: x.name(), vaes)):
         ax = axes[idx][0] if n_weights > 1 else axes
         ax.plot(weights_range,
                 np.log10(encoder_stds[name]),
-                label='{} encoder log-std'.format(name))
-    title = '{} log-std'
-    ax.set_title(title.format('Encoder'))
+                label=names[name])
     ax.set_xlabel('epoch')
     ax.set_ylabel('log-std')
     ax.legend(loc='best')
