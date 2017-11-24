@@ -352,7 +352,7 @@ def calculate_stds2(vaes, sess, input_x, batch_xs, config_params,
             _, std = get_gradient_mean_and_std(
                 vae, sess, input_x, batch_xs,
                 config_params['n_iterations'], vae_part)
-            stds[vae.name()].append(min(1e4, std))
+            stds[vae.name()].append(min(1e5, std))
     return stds
 
 
