@@ -54,6 +54,8 @@ def main():
                       action='callback', callback=lrs_callback)
     parser.add_option("--n_samples", type='int',
                       help="train objective samples")
+    parser.add_option("--train_b_size", type='int', default=128,
+                      help="train batch size")
     parser.add_option("--test_b_size", type='int', default=1024,
                       help="test batch size")
     parser.add_option("--test_n_samples", type='int', default=5,
@@ -100,7 +102,7 @@ def main():
         'n_ary': options.n_ary,
         'encoder_distribution': options.en_dist,
         'learning_rate': options.l_r,
-        'train_batch_size': 128,
+        'train_batch_size': options.train_b_size,
         'train_obj_samples': options.n_samples,
         'val_batch_size': 1024,
         'val_obj_samples': 5,
