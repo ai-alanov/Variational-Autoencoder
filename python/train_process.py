@@ -535,8 +535,8 @@ def get_fixed_omniglot(datasets_dir, validation_size=0):
         return data.reshape((-1, 28 * 28), order='fortran')
     omni_raw = scipy.io.loadmat(
         os.path.join(datasets_dir, 'BinaryOMNIGLOT', 'chardata.mat'))
-    train_data = shuffle(reshape_omni(omni_raw['data'].T.astype('float32')))
-    test_data = shuffle(reshape_omni(omni_raw['testdata'].T.astype('float32')))
+    train_data = reshape_omni(omni_raw['data'].T.astype('float32'))
+    test_data = reshape_omni(omni_raw['testdata'].T.astype('float32'))
     validation_data = train_data[:validation_size]
     train_data = train_data[validation_size:]
 
