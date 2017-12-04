@@ -599,7 +599,7 @@ def choose_vaes_and_learning_rates(encoder_distribution, train_obj_samples,
 
 
 def setup_vaes_and_params(X_train, X_val, X_test, dataset, n_z, n_ary,
-                          encoder_distribution, learning_rate,
+                          encoder_distribution, learning_rate, nonlinearity,
                           train_batch_size, train_obj_samples, val_batch_size,
                           val_obj_samples, test_batch_size, test_obj_samples,
                           cuda_devices, save_step, n_epochs=3001,
@@ -665,7 +665,8 @@ def setup_vaes_and_params(X_train, X_val, X_test, dataset, n_z, n_ary,
         'n_samples': train_params['obj_samples'],
         'encoder_distribution': encoder_distribution,
         'network_architecture': network_architecture,
-        'learning_rate': learning_rate or learning_rates[0]
+        'learning_rate': learning_rate or learning_rates[0],
+        'nonlinearity': nonlinearity
     }
 
     vaes = choose_vaes_and_learning_rates(encoder_distribution,
