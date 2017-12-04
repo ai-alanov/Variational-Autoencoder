@@ -92,7 +92,8 @@ def main():
     parser.add_option("--n_epochs", type='int', default=3001,
                       help="number of training epochs")
     (options, args) = parser.parse_args()
-    options_to_str = ['{}{}'.format(k, v) for k, v in vars(options).items()]
+    options_to_str = ['{}:{}'.format(k[:3], v)
+                      for k, v in vars(options).items()]
     logging_file = '-'.join(sorted(options_to_str))
     logging_file += datetime.now().strftime("_%H:%M:%S") + '.txt'
     log_dir = os.path.join('logs', datetime.now().strftime("%Y-%m-%d"))
