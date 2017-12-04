@@ -91,6 +91,8 @@ def main():
                       callback=split_by_comma_callback)
     parser.add_option("--n_epochs", type='int', default=3001,
                       help="number of training epochs")
+    parser.add_option("--valid_size", type='int', default=1345,
+                      help="validation size")
     (options, args) = parser.parse_args()
     options_to_str = ['{}:{}'.format(k[:3], v)
                       for k, v in vars(options).items()]
@@ -103,7 +105,8 @@ def main():
     if options.dataset == 'BinaryMNIST':
         data = get_fixed_mnist('datasets/', validation_size=10000)
     elif options.dataset == 'BinaryOMNIGLOT':
-        data = get_fixed_omniglot('datasets/', validation_size=1345)
+        data = get_fixed_omniglot('datasets/',
+                                  validation_size=options.valid_size)
     X_train, X_val, X_test = data.train, data.validation, data.test
 
     params = {
