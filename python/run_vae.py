@@ -42,6 +42,15 @@ def split_by_comma_callback(option, opt, value, parser):
     setattr(parser.values, option.dest, value.split(','))
 
 
+def nonlinearity_callback(option, opt, value, parser):
+    if value == 'softplus':
+        setattr(parser.values, option.dest, tf.nn.softplus)
+    elif value == 'tanh':
+        setattr(parser.values, option.dest, tf.nn.tanh)
+    else:
+        raise ValueError('Invalid nonlinearity: {}'.format(value))
+
+
 def main():
     parser = OptionParser(usage="usage: %prog [options]",
                           version="%prog 1.0")
@@ -74,6 +83,9 @@ def main():
                       help="number of iterations for gradient std estimation")
     parser.add_option("--save_step", type='int', default=100,
                       help="step of saving weights")
+    parser.add_option("--nonlinearity", type='string', default='softplus',
+                      help="nonlinearity for VAE", action='callback',
+                      callback=nonlinearity_callback)
     parser.add_option("--weights", type='string', default=None,
                       help="weight names for plot stds", action='callback',
                       callback=split_by_comma_callback)
@@ -102,6 +114,7 @@ def main():
         'n_ary': options.n_ary,
         'encoder_distribution': options.en_dist,
         'learning_rate': options.l_r,
+        'nonlinearity': options.nonlinearity,
         'train_batch_size': options.train_b_size,
         'train_obj_samples': options.n_samples,
         'val_batch_size': 1024,
