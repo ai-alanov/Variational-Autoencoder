@@ -104,8 +104,8 @@ def main():
 
     if options.dataset == 'BinaryMNIST':
         data = get_fixed_mnist('datasets/', validation_size=10000)
-    elif options.dataset == 'BinaryOMNIGLOT':
-        data = get_fixed_omniglot('datasets/',
+    elif 'OMNIGLOT' in options.dataset:
+        data = get_fixed_omniglot(os.path.join('datasets', options.dataset),
                                   validation_size=options.valid_size)
     X_train, X_val, X_test = data.train, data.validation, data.test
 
