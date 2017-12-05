@@ -216,8 +216,10 @@ def run_epoch(vaes, sess, input_x, data, n_samples, batch_size,
         feed_dict = {input_x: batch_xs}
         for vae in vaes:
             if is_train:
-                d_tensors, f_dict = vae.partial_fit(n_samples=obj_samples,
-                                                    is_train=is_train)
+                lr_decay = 10 ** (-(epoch // 200) / 2)
+                d_tensors, f_dict = vae.partial_fit(
+                    n_samples=obj_samples, is_train=is_train,
+                    learning_rate_decay=lr_decay)
             else:
                 d_tensors, f_dict = vae.loss(n_samples=obj_samples,
                                              is_train=is_train)
@@ -230,8 +232,8 @@ def run_epoch(vaes, sess, input_x, data, n_samples, batch_size,
     return dict([(vae.name(), np.mean(costs[vae.name()])) for vae in vaes])
 
 
-def run_train_step(vaes, sess, input_x, train_params):
-    return run_epoch(vaes, sess, input_x, **train_params)
+def run_train_step(vaes, sess, input_x, train_params, **kwargs):
+    return run_epoch(vaes, sess, input_x, **train_params, **kwargs)
 
 
 def run_epoch_evaluation(vaes, sess, input_x, test_params, **kwargs):
@@ -247,7 +249,8 @@ def train_model(vaes, vae_params, train_params, val_params, test_params,
     val_loss = defaultdict(list)
     test_loss = defaultdict(list)
     for epoch in tqdm(range(config_params['n_epochs'])):
-        train_costs = run_train_step(vaes, sess, input_x, train_params)
+        train_costs = run_train_step(vaes, sess, input_x,
+                                     train_params, epoch=epoch)
         if epoch % config_params['display_step'] == 0:
             val_costs = run_epoch_evaluation(vaes, sess, input_x, val_params)
             test_costs = run_epoch_evaluation(vaes, sess, input_x, test_params)
