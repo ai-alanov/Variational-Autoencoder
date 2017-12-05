@@ -210,13 +210,15 @@ def run_epoch(vaes, sess, input_x, data, n_samples, batch_size,
     n_batches = int(n_samples / batch_size)
     if need_to_restore:
         restore_vae_weights(vaes, sess, epoch, save_path, learning_rate)
+    lr_decay = 10 ** (-(epoch // 200) / 2)
+    if epoch % 200 == 0:
+        print('lr: {:.10f}'.format(vaes[0].learning_rate_value * lr_decay))
     for _ in range(n_batches):
         batch_xs = get_batch(data, batch_size)
         dict_of_tensors = {}
         feed_dict = {input_x: batch_xs}
         for vae in vaes:
             if is_train:
-                lr_decay = 10 ** (-(epoch // 200) / 2)
                 d_tensors, f_dict = vae.partial_fit(
                     n_samples=obj_samples, is_train=is_train,
                     learning_rate_decay=lr_decay)
