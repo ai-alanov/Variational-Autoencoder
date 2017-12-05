@@ -222,7 +222,6 @@ class VAE(object):
             self.n_samples: n_samples,
             self.is_train: 1 if is_train else 0
         }
-        print('lr: {:.10f}'.format(learning_rate))
         return dict_of_tensors, feed_dict
 
     def loss(self, n_samples=None, is_train=True):
