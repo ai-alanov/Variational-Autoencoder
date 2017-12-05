@@ -478,7 +478,7 @@ def download_mnist(datasets_dir):
         urllib.request.urlretrieve(url, path_to_file)
 
 
-def download_omniglot(datasets_dir):
+def download_omniglot(datasets_dir, binarize=True):
     import urllib.request
 
     filename = 'chardata.mat'
@@ -495,7 +495,8 @@ def download_omniglot(datasets_dir):
 
     def binarize(data):
         return (np.random.rand(*data.shape) <= data).astype('float32')
-    datasets = list(map(lambda x: binarize(x), datasets))
+    if binarize:
+        datasets = list(map(lambda x: binarize(x), datasets))
     omni_raw['data'], omni_raw['test_data'] = datasets
     path_to_file = os.path.join(datasets_dir, 'BinaryOMNIGLOT', filename)
     os.makedirs(os.path.dirname(path_to_file), exist_ok=True)
