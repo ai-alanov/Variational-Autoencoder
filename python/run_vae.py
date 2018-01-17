@@ -83,7 +83,7 @@ def main():
                       help="number of iterations for gradient std estimation")
     parser.add_option("--save_step", type='int', default=100,
                       help="step of saving weights")
-    parser.add_option("--nonlinearity", type='string', default='softplus',
+    parser.add_option("--nonlinearity", type='string', default=tf.nn.softplus,
                       help="nonlinearity for VAE", action='callback',
                       callback=nonlinearity_callback)
     parser.add_option("--weights", type='string', default=None,
