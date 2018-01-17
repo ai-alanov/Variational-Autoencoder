@@ -210,9 +210,9 @@ def run_epoch(vaes, sess, input_x, data, n_samples, batch_size,
     n_batches = int(n_samples / batch_size)
     if need_to_restore:
         restore_vae_weights(vaes, sess, epoch, save_path, learning_rate)
-    lr_decay = (round(10.**(1 - np.log(epoch + 1) / (7. * np.log(3))), 1)
+    lr_decay = (round(10.**(1 - round(np.log(epoch + 1) / np.log(3)) / 7.), 1)
                 if epoch else 1.0)
-    if epoch and epoch % 150 == 0:
+    if epoch:
         print('lr: {:.10f}'.format(vaes[0].learning_rate_value * lr_decay))
     for _ in range(n_batches):
         batch_xs = get_batch(data, batch_size)
