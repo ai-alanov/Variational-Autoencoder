@@ -67,9 +67,9 @@ def log_output(output, logging_path=None, **kwargs):
         print(output, **kwargs)
 
 
-def print_costs(vaes, epoch, test_costs, val_costs=None, train_costs=None,
-                logging_path=None):
-    log_output(epoch + 1, logging_path)
+def print_costs(vaes, epoch, stage, config_params, test_costs, val_costs=None,
+                train_costs=None, logging_path=None):
+    log_output('epoch = {}, stage = {}'.format(epoch, stage), logging_path)
     for vae in vaes:
         vae_name = vae.name()
         data_names = ['test', 'validation', 'train']
@@ -83,6 +83,9 @@ def print_costs(vaes, epoch, test_costs, val_costs=None, train_costs=None,
             output = '{} cost = {:.5f} '
             output = output.format(name, costs[name]) if costs[name] else ''
             all_output += output
+        lr_decay = config_params['lr_decay'](stage)
+        learning_rate = vae.learning_rate_value * lr_decay
+        all_output += 'learning rate = {:.5f}'.format(learning_rate)
         log_output(all_output, logging_path, flush=True)
 
 
@@ -102,7 +105,11 @@ def plot_loss(vaes, test_loss, val_loss, epoch, step,
     plt.show()
 
 
-def save_vae_weights(vaes, sess, epoch, save_dir):
+def save_vae_weights(vaes, sess, epoch, config_params):
+    if not (config_params['save_weights']
+            and epoch % config_params['save_step'] == 0):
+        return None
+    save_dir = config_params['save_path']
     for vae in vaes:
         save_path = os.path.join(save_dir, vae.name(), vae.dataset_name(),
                                  vae.parameters())
@@ -205,15 +212,11 @@ def save_loss(vaes, loss, save_dir, results_dir, loss_name,
 
 def run_epoch(vaes, sess, input_x, data, n_samples, batch_size,
               obj_samples, is_train=True, need_to_restore=False,
-              save_path=None, epoch=None, learning_rate=None):
+              save_path=None, epoch=None, learning_rate=None, lr_decay=None):
     costs = defaultdict(list)
     n_batches = int(n_samples / batch_size)
     if need_to_restore:
         restore_vae_weights(vaes, sess, epoch, save_path, learning_rate)
-    lr_decay = (round(10.**(1 - round(np.log(epoch + 1) / np.log(3)) / 7.), 1)
-                if epoch else 1.0)
-    if epoch:
-        print('lr: {:.10f}'.format(vaes[0].learning_rate_value * lr_decay))
     for _ in range(n_batches):
         batch_xs = get_batch(data, batch_size)
         dict_of_tensors = {}
@@ -235,8 +238,35 @@ def run_epoch(vaes, sess, input_x, data, n_samples, batch_size,
     return dict([(vae.name(), np.mean(costs[vae.name()])) for vae in vaes])
 
 
-def run_train_step(vaes, sess, input_x, train_params, **kwargs):
-    return run_epoch(vaes, sess, input_x, **train_params, **kwargs)
+def logging_experiment(epoch, stage, vaes, sess, input_x, train_costs,
+                       config_params, info_for_evaluation):
+    val_params = info_for_evaluation['val_params']
+    test_params = info_for_evaluation['test_params']
+    val_costs = run_epoch_evaluation(vaes, sess, input_x, val_params)
+    test_costs = run_epoch_evaluation(vaes, sess, input_x, test_params)
+    val_loss = info_for_evaluation['val_loss']
+    test_loss = info_for_evaluation['test_loss']
+    for vae in vaes:
+        val_loss[vae.name()].append(val_costs[vae.name()])
+        test_loss[vae.name()].append(test_costs[vae.name()])
+    clear_output()
+    print_costs(vaes, epoch, stage, config_params, test_costs, val_costs,
+                train_costs, config_params['logging_path'])
+    # plot_loss(vaes, test_loss, val_loss, epoch,
+    #           config_params['display_step'])
+
+
+def run_train_stage(vaes, sess, input_x, train_params, config_params,
+                    info_for_evaluation, current_epoch, stage, **kwargs):
+    n_epochs = config_params['stage_to_epochs'](stage)
+    for epoch in tqdm(range(n_epochs)):
+        current_epoch += 1
+        train_costs = run_epoch(vaes, sess, input_x, **train_params, **kwargs)
+        if current_epoch and not current_epoch % config_params['display_step']:
+            logging_experiment(current_epoch, stage, vaes, sess, input_x,
+                               train_costs, config_params, info_for_evaluation)
+        save_vae_weights(vaes, sess, current_epoch, config_params)
+    return train_costs, current_epoch
 
 
 def run_epoch_evaluation(vaes, sess, input_x, test_params, **kwargs):
@@ -249,25 +279,20 @@ def train_model(vaes, vae_params, train_params, val_params, test_params,
     set_up_cuda_devices(config_params['cuda_devices'])
     vaes, input_x = set_up_vaes(vaes, vae_params)
     sess = set_up_session(vaes, config_params)
-    val_loss = defaultdict(list)
-    test_loss = defaultdict(list)
-    for epoch in tqdm(range(config_params['n_epochs'])):
-        train_costs = run_train_step(vaes, sess, input_x,
-                                     train_params, epoch=epoch)
-        if epoch % config_params['display_step'] == 0:
-            val_costs = run_epoch_evaluation(vaes, sess, input_x, val_params)
-            test_costs = run_epoch_evaluation(vaes, sess, input_x, test_params)
-            for vae in vaes:
-                val_loss[vae.name()].append(val_costs[vae.name()])
-                test_loss[vae.name()].append(test_costs[vae.name()])
-            clear_output()
-            print_costs(vaes, epoch, test_costs, val_costs,
-                        train_costs, config_params['logging_path'])
-            plot_loss(vaes, test_loss, val_loss, epoch,
-                      config_params['display_step'])
-        if epoch % config_params['save_step'] == 0:
-            if config_params['save_weights']:
-                save_vae_weights(vaes, sess, epoch, config_params['save_path'])
+    info_for_evaluation = {
+        'val_loss': defaultdict(list),
+        'test_loss': defaultdict(list),
+        'val_params': val_params,
+        'test_params': test_params
+    }
+    current_epoch = 0
+    for stage in tqdm(range(config_params['n_stages'])):
+        lr_decay = config_params['lr_decay'](stage)
+        train_costs, current_epoch = run_train_stage(
+            vaes, sess, input_x, train_params, config_params,
+            info_for_evaluation, current_epoch, stage, lr_decay=lr_decay)
+        # logging_experiment(current_epoch, stage, vaes, sess, input_x,
+        #                    train_costs, config_params, info_for_evaluation)
     sess.close()
     tf.reset_default_graph()
 
@@ -609,11 +634,13 @@ def setup_vaes_and_params(X_train, X_val, X_test, dataset, n_z, n_ary,
                           encoder_distribution, learning_rate, nonlinearity,
                           train_batch_size, train_obj_samples, val_batch_size,
                           val_obj_samples, test_batch_size, test_obj_samples,
-                          cuda_devices, save_step, n_epochs=3001,
-                          save_weights=True, mem_fraction=0.333, all_vaes=True,
+                          cuda_devices, save_step, display_step, n_stages=3001,
+                          stage_to_epochs=lambda x: 1, save_weights=True,
+                          mem_fraction=0.333, all_vaes=True,
                           mode='train', results_dir=None,
                           logging_path='logging.txt', learning_rates=None,
-                          vaes_to_choose='all', n_iterations=10, weights=None):
+                          vaes_to_choose='all', n_iterations=10, weights=None,
+                          lr_decay=lambda x: 1):
     n_input = X_train.images.shape[1]
     n_hidden = 200
     network_architecture = {
@@ -651,8 +678,9 @@ def setup_vaes_and_params(X_train, X_val, X_test, dataset, n_z, n_ary,
         'obj_samples': test_obj_samples
     }
     config_params = {
-        'n_epochs': n_epochs,
-        'display_step': 100,
+        'n_stages': n_stages,
+        'stage_to_epochs': stage_to_epochs,
+        'display_step': display_step,
         'save_weights': save_weights,
         'save_step': save_step,
         'save_path': 'weights',
@@ -662,7 +690,8 @@ def setup_vaes_and_params(X_train, X_val, X_test, dataset, n_z, n_ary,
         'logging_path': logging_path,
         'learning_rates': learning_rates,
         'n_iterations': n_iterations,
-        'weights': weights
+        'weights': weights,
+        'lr_decay': lr_decay
     }
     vae_params = {
         'dataset': dataset,
