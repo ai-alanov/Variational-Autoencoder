@@ -29,9 +29,9 @@ def set_up_cuda_devices(cuda_devices):
 
 def set_up_vaes(vaes, vae_params):
     input_x = tf.placeholder(tf.float32, [None, 1, vae_params['n_input']])
-    input_x = tf.random_uniform(tf.shape(input_x)) <= input_x
-    input_x = tf.cast(input_x, tf.float32)
-    vae_params['x'] = input_x
+    binary_x = tf.random_uniform(tf.shape(input_x)) <= input_x
+    binary_x = tf.cast(binary_x, tf.float32)
+    vae_params['x'] = binary_x
     vaes = [vae(**vae_params) for vae in vaes]
     return vaes, input_x
 
@@ -260,12 +260,12 @@ def run_train_stage(vaes, sess, input_x, train_params, config_params,
                     info_for_evaluation, current_epoch, stage, **kwargs):
     n_epochs = config_params['stage_to_epochs'](stage)
     for epoch in tqdm(range(n_epochs)):
-        current_epoch += 1
         train_costs = run_epoch(vaes, sess, input_x, **train_params, **kwargs)
-        if current_epoch and not current_epoch % config_params['display_step']:
+        if not current_epoch % config_params['display_step']:
             logging_experiment(current_epoch, stage, vaes, sess, input_x,
                                train_costs, config_params, info_for_evaluation)
         save_vae_weights(vaes, sess, current_epoch, config_params)
+        current_epoch += 1
     return train_costs, current_epoch
 
 
