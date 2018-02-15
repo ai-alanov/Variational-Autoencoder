@@ -97,6 +97,8 @@ def main():
                       help="test batch size")
     parser.add_option("--test_n_samples", type='int', default=5,
                       help="test objective samples")
+    parser.add_option("--val_n_samples", type='int', default=5,
+                      help="validation objective samples")
     parser.add_option("--c_devs", type='string', help="cuda devices")
     parser.add_option("--mem_frac", type='float', default=0.5,
                       help="memory fraction used in gpu")
@@ -163,7 +165,7 @@ def main():
         'train_batch_size': options.train_b_size,
         'train_obj_samples': options.n_samples,
         'val_batch_size': 1024,
-        'val_obj_samples': 5,
+        'val_obj_samples': options.val_n_samples,
         'test_batch_size': options.test_b_size,
         'test_obj_samples': options.test_n_samples,
         'cuda_devices': options.c_devs,
