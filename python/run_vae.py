@@ -169,6 +169,7 @@ def main():
         'cuda_devices': options.c_devs,
         'save_step': options.save_step,
         'display_step': options.display_step,
+        'n_epocs': options.n_epocs,
         'n_stages': options.n_stages if options.n_stages else 1,
         'stage_to_epochs': (options.stage_to_epochs if options.n_stages
                             else lambda x: options.n_epochs),
