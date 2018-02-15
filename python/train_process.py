@@ -678,7 +678,7 @@ def setup_vaes_and_params(X_train, X_val, X_test, dataset, n_z, n_ary,
         'obj_samples': test_obj_samples
     }
     config_params = {
-        'n_epocs': n_epochs,
+        'n_epochs': n_epochs,
         'n_stages': n_stages,
         'stage_to_epochs': stage_to_epochs,
         'display_step': display_step,
