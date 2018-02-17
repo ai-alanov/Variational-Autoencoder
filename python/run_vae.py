@@ -6,6 +6,7 @@ from optparse import OptionParser
 import sys
 import os
 import warnings
+import collections
 
 import matplotlib
 matplotlib.use('Agg')
@@ -138,7 +139,9 @@ def main():
                       action='callback', callback=lr_decay_callback)
     (options, args) = parser.parse_args()
     options_to_str = ['{}:{}'.format(k[:3], v)
-                      for k, v in vars(options).items() if not callable(v)]
+                      for k, v in vars(options).items()
+                      if not (callable(v)
+                              or isinstance(v, collections.Iterable))]
     logging_file = '-'.join(sorted(options_to_str))
     logging_file += datetime.now().strftime("_%H:%M:%S") + '.txt'
     log_dir = os.path.join('logs', datetime.now().strftime("%Y-%m-%d"))
