@@ -3,6 +3,9 @@ import numpy as np
 import tensorflow as tf
 import collections
 import os
+import glob
+from datetime import datetime
+import csv
 
 
 def flatten(d, parent_key='', sep='_'):
@@ -143,3 +146,23 @@ def get_gradient_mean_and_std(vae, sess, input_x, batch_xs, n_iterations,
 def makedirs(path):
     if not os.path.exists(path):
         os.makedirs(path)
+
+
+def create_logging_file(log_dir, options):
+    log_dir = os.path.join(log_dir, datetime.now().strftime("%Y-%m-%d"))
+    n_files = len(glob.glob(os.path.join(log_dir, '*')))
+    file_id = '{:06d}'.format(n_files if n_files else 1)
+    log_file = file_id + datetime.now().strftime("_%H:%M:%S") + '.txt'
+    log_file = os.path.join(log_dir, log_file)
+    options = dict({'id': file_id}, **options)
+    if os.path.exists(log_dir):
+        with open(os.path.join(log_dir, 'id_to_options.csv'), 'a') as f:
+            w = csv.DictWriter(f, options.keys(), delimiter='\t')
+            w.writerow(options)
+    else:
+        makedirs(log_dir)
+        with open(os.path.join(log_dir, 'id_to_options.csv'), 'w') as f:
+            w = csv.DictWriter(f, options.keys(), delimiter='\t')
+            w.writeheader()
+            w.writerow(options)
+    return log_file
