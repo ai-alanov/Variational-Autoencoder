@@ -154,15 +154,18 @@ def create_logging_file(log_dir, options):
     file_id = '{:06d}'.format(n_files if n_files else 1)
     log_file = file_id + datetime.now().strftime("_%H:%M:%S") + '.txt'
     log_file = os.path.join(log_dir, log_file)
-    options = dict({'id': file_id}, **options)
     if os.path.exists(log_dir):
         with open(os.path.join(log_dir, 'id_to_options.csv'), 'a') as f:
-            w = csv.DictWriter(f, options.keys(), delimiter='\t')
+            w = csv.DictWriter(f, ['id'] + sorted(options.keys()),
+                               delimiter='\t')
+            options['id'] = file_id
             w.writerow(options)
     else:
         makedirs(log_dir)
         with open(os.path.join(log_dir, 'id_to_options.csv'), 'w') as f:
-            w = csv.DictWriter(f, options.keys(), delimiter='\t')
+            w = csv.DictWriter(f, ['id'] + sorted(options.keys()),
+                               delimiter='\t')
             w.writeheader()
+            options['id'] = file_id
             w.writerow(options)
     return log_file
