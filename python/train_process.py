@@ -338,7 +338,7 @@ def test_model(vaes, vae_params, test_params, val_params,
 
     results_file = create_logging_file(
         config_params['results_dir'], logging_options)
-    output = '{}: loss = {:.4f}, optimal iter = {}, optimal l_r = {}'
+    output = '{}: loss = {:.4f}, optimal iter = {}, optimal l_r = {}\n'
     with open(results_file, 'w') as f:
         for name in map(lambda x: x.name(), vaes):
             f.write(output.format(name, test_loss[name],
