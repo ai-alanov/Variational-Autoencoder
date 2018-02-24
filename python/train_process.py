@@ -17,7 +17,7 @@ from IPython import display
 from tensorflow.contrib.learn.python.learn.datasets import base, mnist
 from tensorflow.python.framework import dtypes
 
-from utils import makedirs, get_gradient_mean_and_std
+from utils import makedirs, get_gradient_mean_and_std, create_logging_file
 from vae import *  # noqa
 
 
@@ -291,8 +291,6 @@ def train_model(vaes, vae_params, train_params, val_params, test_params,
         train_costs, current_epoch = run_train_stage(
             vaes, sess, input_x, train_params, config_params,
             info_for_evaluation, current_epoch, stage, lr_decay=lr_decay)
-        # logging_experiment(current_epoch, stage, vaes, sess, input_x,
-        #                    train_costs, config_params, info_for_evaluation)
     sess.close()
     tf.reset_default_graph()
 
@@ -300,24 +298,17 @@ def train_model(vaes, vae_params, train_params, val_params, test_params,
 def grid_search_on_validation(sess, vaes, input_x, val_params, config_params):
     learning_rates = config_params['learning_rates']
     save_path = config_params['save_path']
-    val_loss = load_loss(vaes, learning_rates, save_path,
-                         config_params['results_dir'], 'val.pkl')
-    noncashed_vaes = defaultdict(list)
-    for lr in learning_rates:
-        noncashed_vaes[str(lr)] = [vae for vae in vaes
-                                   if not val_loss[str(lr)][vae.name()]]
+    val_loss = defaultdict(lambda: defaultdict(list))
     for lr in learning_rates:
         for epoch in tqdm(range(0, config_params['n_epochs'],
                                 config_params['save_step'])):
-            val_costs = run_epoch_evaluation(noncashed_vaes[str(lr)], sess,
+            val_costs = run_epoch_evaluation(vaes, sess,
                                              input_x, val_params,
                                              need_to_restore=True,
                                              save_path=save_path,
                                              epoch=epoch, learning_rate=lr)
-            for vae in noncashed_vaes[str(lr)]:
+            for vae in vaes:
                 val_loss[str(lr)][vae.name()].append(val_costs[vae.name()])
-    save_loss(vaes, val_loss, save_path,
-              config_params['results_dir'], 'val.pkl')
     min_loss = defaultdict(lambda: (np.inf, (None, None)))
     for lr in val_loss.keys():
         for vae in vaes:
@@ -331,24 +322,27 @@ def grid_search_on_validation(sess, vaes, input_x, val_params, config_params):
     return optimal_epochs, optimal_lrs
 
 
-def test_model(vaes, vae_params, test_params, val_params, config_params):
+def test_model(vaes, vae_params, test_params, val_params,
+               config_params, logging_options):
     set_up_cuda_devices(config_params['cuda_devices'])
     vaes, input_x = set_up_vaes(vaes, vae_params)
     sess = set_up_session(vaes, config_params)
+
     epochs, learning_rates = grid_search_on_validation(
         sess, vaes, input_x, val_params, config_params)
+
     save_path = config_params['save_path']
     test_loss = run_epoch_evaluation(
         vaes, sess, input_x, test_params, need_to_restore=True,
         save_path=save_path, epoch=epochs, learning_rate=learning_rates)
-    test_loss = {
-        name: (test_loss[name], (epochs[name], learning_rates[name]))
-        for name in map(lambda x: x.name(), vaes)
-    }
-    test_loss['test_samples'] = test_params['obj_samples']
-    save_loss(vaes, test_loss, save_path, config_params['results_dir'],
-              'Test-m{}.pkl'.format(test_params['obj_samples']),
-              epochs, learning_rates)
+
+    results_file = create_logging_file(
+        config_params['results_dir'], logging_options)
+    output = '{}: loss = {:.4f}, optimal iter = {}, optimal l_r = {}'
+    with open(results_file, 'w') as f:
+        for name in map(lambda x: x.name(), vaes):
+            f.write(output.format(name, test_loss[name],
+                                  epochs[name], learning_rates[name]))
     sess.close()
     tf.reset_default_graph()
 
@@ -561,7 +555,7 @@ def get_fixed_mnist(datasets_dir, validation_size=0):
     return base.Datasets(train=train, validation=validation, test=test)
 
 
-def get_fixed_omniglot(datasets_dir, validation_size=0):
+def get_omniglot(datasets_dir, validation_size=0):
     def reshape_omni(data):
         data = data.reshape((-1, 28, 28))
         return data.reshape((-1, 28 * 28), order='fortran')
@@ -630,20 +624,8 @@ def choose_vaes_and_learning_rates(encoder_distribution, train_obj_samples,
     return vaes
 
 
-def setup_vaes_and_params(X_train, X_val, X_test, dataset, n_z, n_ary,
-                          encoder_distribution, learning_rate, nonlinearity,
-                          train_batch_size, train_obj_samples, val_batch_size,
-                          val_obj_samples, test_batch_size, test_obj_samples,
-                          cuda_devices, save_step, display_step, n_epochs,
-                          n_stages, stage_to_epochs=lambda x: 1,
-                          save_weights=True, mem_fraction=0.333, all_vaes=True,
-                          mode='train', results_dir=None,
-                          logging_path='logging.txt', learning_rates=None,
-                          vaes_to_choose='all', n_iterations=10, weights=None,
-                          lr_decay=lambda x: 1):
-    n_input = X_train.images.shape[1]
-    n_hidden = 200
-    network_architecture = {
+def setup_net_architecture(n_input, n_z, n_ary, n_hidden, en_dist):
+    net_architecture = {
         'encoder': {
             'h1': (n_input, n_hidden),
             'h2': (n_hidden, n_ary * n_hidden),
@@ -655,60 +637,90 @@ def setup_vaes_and_params(X_train, X_val, X_test, dataset, n_z, n_ary,
             'out_mean': (n_hidden, n_input)
         }
     }
-    if encoder_distribution == 'gaussian':
+    if en_dist == 'gaussian':
         layer_sizes = (n_ary * n_hidden, n_ary * n_z)
-        network_architecture['encoder']['out_log_sigma_sq'] = layer_sizes
+        net_architecture['encoder']['out_log_sigma_sq'] = layer_sizes
 
-    train_params = {
-        'data': X_train,
-        'n_samples': X_train.num_examples,
-        'batch_size': train_batch_size,
-        'obj_samples': train_obj_samples
+    return net_architecture
+
+
+def setup_data_params(data_type, params):
+    data_params = {
+        'data': params['X_{}'.format(data_type)],
+        'n_samples': params['X_{}'.format(data_type)].num_examples,
+        'batch_size': params['{}_b_size'.format(data_type)],
+        'obj_samples': params['{}_obj_samples'.format(data_type)]
     }
-    val_params = {
-        'data': X_val,
-        'n_samples': X_val.num_examples,
-        'batch_size': val_batch_size,
-        'obj_samples': val_obj_samples
-    }
-    test_params = {
-        'data': X_test,
-        'n_samples': X_test.num_examples,
-        'batch_size': test_batch_size,
-        'obj_samples': test_obj_samples
-    }
+    return data_params
+
+
+def setup_config_params(params):
     config_params = {
-        'n_epochs': n_epochs,
-        'n_stages': n_stages,
-        'stage_to_epochs': stage_to_epochs,
-        'display_step': display_step,
-        'save_weights': save_weights,
-        'save_step': save_step,
-        'save_path': 'weights',
-        'cuda_devices': cuda_devices,
-        'mem_fraction': mem_fraction,
-        'results_dir': results_dir,
-        'logging_path': logging_path,
-        'learning_rates': learning_rates,
-        'n_iterations': n_iterations,
-        'weights': weights,
-        'lr_decay': lr_decay
+        'n_epochs': params['n_epochs'],
+        'n_stages': params['n_stages'],
+        'stage_to_epochs': params['stage_to_epochs'],
+        'display_step': params['display_step'],
+        'save_weights': params['save_weights'],
+        'save_step': params['save_step'],
+        'save_path': params['weights_dir'],
+        'cuda_devices': params['c_devs'],
+        'mem_fraction': params['mem_frac'],
+        'results_dir': params['results_dir'],
+        'logging_path': params['logging_path'],
+        'learning_rates': params['l_rs'],
+        'n_iterations': params['n_iters'],
+        'weights': params['weights'],
+        'lr_decay': params['lr_decay']
     }
-    vae_params = {
-        'dataset': dataset,
-        'n_input': n_input,
-        'n_z': n_z,
-        'n_ary': n_ary,
-        'n_samples': train_params['obj_samples'],
-        'encoder_distribution': encoder_distribution,
-        'network_architecture': network_architecture,
-        'learning_rate': learning_rate or learning_rates[0],
-        'nonlinearity': nonlinearity
-    }
+    return config_params
 
-    vaes = choose_vaes_and_learning_rates(encoder_distribution,
-                                          train_obj_samples,
-                                          vaes_to_choose=vaes_to_choose)
+
+def setup_vae_params(params, net_architecture):
+    vae_params = {
+        'dataset': params['dataset'],
+        'n_input': params['X_train'].images.shape[1],
+        'n_z': params['n_z'],
+        'n_ary': params['n_ary'],
+        'n_samples': params['train_obj_samples'],
+        'encoder_distribution': params['en_dist'],
+        'network_architecture': net_architecture,
+        'learning_rate': params['l_r'] or params['l_rs'][0],
+        'nonlinearity': params['nonlinearity']
+    }
+    return vae_params
+
+
+def set_up_logging_options(params):
+    logging_options = {
+        'test_obj_samples': params['test_obj_samples'],
+        'train_obj_samples': params['train_obj_samples'],
+        'encoder': params['en_dist'],
+        'n_ary': params['n_ary'],
+        'n_z': params['n_z'],
+        'dataset': params['dataset']
+    }
+    return logging_options
+
+
+def setup_vaes_and_params(params):
+    n_input = params['X_train'].images.shape[1]
+    n_z, n_ary, n_hidden = params['n_z'], params['n_ary'], params['n_hidden']
+    net_architecture = setup_net_architecture(
+        n_input, n_z, n_ary, n_hidden, params['en_dist'])
+
+    train_params = setup_data_params('train', params)
+    val_params = setup_data_params('val', params)
+    test_params = setup_data_params('test', params)
+
+    config_params = setup_config_params(params)
+
+    vae_params = setup_vae_params(params, net_architecture)
+
+    test_logging_options = set_up_logging_options(params)
+
+    vaes = choose_vaes_and_learning_rates(params['en_dist'],
+                                          train_params['obj_samples'],
+                                          vaes_to_choose=params['vaes'])
 
     input_vaes_and_params = {
         'vaes': vaes,
@@ -716,11 +728,16 @@ def setup_vaes_and_params(X_train, X_val, X_test, dataset, n_z, n_ary,
         'train_params': train_params,
         'val_params': val_params,
         'test_params': test_params,
-        'config_params': config_params
+        'config_params': config_params,
+        'logging_options': test_logging_options
     }
-    if mode == 'test':
+
+    if params['mode'] == 'test':
         input_vaes_and_params.pop('train_params')
-    elif mode == 'visualize':
+    elif params['mode'] == 'visualize':
         input_vaes_and_params.pop('val_params')
         input_vaes_and_params.pop('test_params')
+        input_vaes_and_params.pop('logging_options')
+    else:
+        input_vaes_and_params.pop('logging_options')
     return input_vaes_and_params
