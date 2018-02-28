@@ -130,7 +130,11 @@ def find_file(vae, save_dir, lr):
     if not files:
         save_path = save_path[:-1]
         files = glob.glob(os.path.join(save_path, '*'))
-    latest_file = sorted(files)[-1]
+    try:
+        latest_file = sorted(files)[-1]
+    except IndexError as e:
+        print(save_path)
+        raise e
     now = os.path.basename(latest_file)
     return save_path, now
 
