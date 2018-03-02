@@ -388,7 +388,10 @@ class NVILVAE(VAE):
         self.baseline = build_layer(  # noqa
             tf.stop_gradient(self.encoder_layer2),
             *self.baseline_weights)
-        self.baseline_weights = list(self.baseline_weights)
+        self.baseline_weights = {
+            'baseline_w': self.baseline_weights[0],
+            'baseline_b': self.baseline_weights[1]
+        }
         self.baseline_saver = tf.train.Saver(self.baseline_weights,
                                              max_to_keep=None)
 
