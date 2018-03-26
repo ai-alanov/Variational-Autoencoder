@@ -399,8 +399,8 @@ class NVILVAE(VAE):
         self._create_loss()
 
         if self.n_samples_value == 1:
-            self.nvil_cost = - (self.encoder_log_density
-                                * (self.decoder_log_density - self.baseline))
+            self.nvil_cost = - self.encoder_log_density * \
+                tf.stop_gradient(self.decoder_log_density - self.baseline)
             self.cost_for_encoder_weights = tf.reduce_mean(
                 self.kl_divergency + self.nvil_cost)
             self.cost_for_baseline = tf.reduce_mean(
