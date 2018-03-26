@@ -367,7 +367,7 @@ class VIMCOVAE(VAE):
 
 
 class NVILVAE(VAE):
-    def __init__(self, *args, baseline_learning_rate=1e-2, **kwargs):
+    def __init__(self, *args, baseline_learning_rate=1e-3, **kwargs):
         super().__init__(*args, **kwargs)
         self.baseline_learning_rate = baseline_learning_rate
 
@@ -399,8 +399,10 @@ class NVILVAE(VAE):
         self._create_loss()
 
         if self.n_samples_value == 1:
+            self.decoder_log_density_adjusted = self.decoder_log_density - \
+                tf.stop_gradient(self.baseline)
             self.nvil_cost = - self.encoder_log_density * \
-                tf.stop_gradient(self.decoder_log_density - self.baseline)
+                self.decoder_log_density_adjusted
             self.cost_for_encoder_weights = tf.reduce_mean(
                 self.kl_divergency + self.nvil_cost)
             self.cost_for_baseline = tf.reduce_mean(
