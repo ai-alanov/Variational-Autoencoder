@@ -403,17 +403,48 @@ class NVILVAE(VAE):
     def _create_loss_optimizer(self):
         self._create_loss()
 
-        if self.decoder_distribution == 'multinomial':
-            self.decoder_log_density_mean = compute_log_density(  # noqa
-                x=self.x_binarized, logits=self.x_reconst_mean,
-                distribution=self.decoder_distribution)
-        elif self.decoder_distribution == 'gaussian':
-            self.decoder_log_density_mean = compute_log_density(  # noqa
-                x=self.x_binarized, mu=tf.nn.softmax(self.x_reconst_mean),
-                sigma=1., distribution=self.decoder_distribution)
+        # if self.n_samples_value == 1:
+        #     jacobian = tf.gradients(
+        #         self.decoder_log_density_mean, self.z_mean)[0]
+        #     self.decoder_log_density_mean = tf.stop_gradient(
+        #         self.decoder_log_density_mean)
+        # elif self.n_samples_value > 1:
+        #     self.multisample_elbo_mean = - compute_multisample_elbo(  # noqa
+        #         self.decoder_log_density_mean, self.kl_divergency)
+        #     jacobian = tf.gradients(self.multisample_elbo_mean, self.z_mean)[0]
+        #     self.multisample_elbo_mean = tf.stop_gradient(
+        #         self.multisample_elbo_mean)
+        # self.jacobian = tf.stop_gradient(jacobian)
+        #
+        # self.linear_part = tf.stop_gradient(tf.reduce_sum(
+        #     self.jacobian * (self.z - self.z_mean), axis=-1))
+        # self.deterministic_term = tf.reduce_sum(self.jacobian * self.z_mean,
+        #                                         axis=-1)
+        #
+        # if self.n_samples_value == 1:
+        #     self.decoder_log_density_adjusted = self.decoder_log_density - \
+        #         self.decoder_log_density_mean
+        #     self.decoder_log_density_adjusted -= self.linear_part
+        #     self.muprop_cost = - self.encoder_log_density * \
+        #         self.decoder_log_density_adjusted
+        #     self.muprop_cost -= self.deterministic_term
+        #     self.cost_for_encoder_weights = tf.reduce_mean(
+        #         self.kl_divergency + self.muprop_cost)
 
         if self.n_samples_value == 1:
-            self.decoder_log_density_adjusted = self.decoder_log_density
+            if self.decoder_distribution == 'multinomial':
+                self.decoder_log_density_mean = compute_log_density(  # noqa
+                    x=self.x_binarized, logits=self.x_reconst_mean,
+                    distribution=self.decoder_distribution)
+            elif self.decoder_distribution == 'gaussian':
+                self.decoder_log_density_mean = compute_log_density(  # noqa
+                    x=self.x_binarized, mu=tf.nn.softmax(self.x_reconst_mean),
+                    sigma=1., distribution=self.decoder_distribution)
+            self.decoder_log_density_mean = tf.stop_gradient(
+                self.decoder_log_density_mean)
+
+            self.decoder_log_density_adjusted = self.decoder_log_density - \
+                self.decoder_log_density_mean
             self.decoder_log_density_adjusted -= tf.stop_gradient(self.baseline)
             self.decoder_log_density_adjusted = tf.stop_gradient(
                 self.decoder_log_density_adjusted)
