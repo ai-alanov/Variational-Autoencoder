@@ -415,7 +415,7 @@ class NVILVAE(VAE):
         if self.n_samples_value == 1:
             self.decoder_log_density_adjusted = self.decoder_log_density - \
                 self.decoder_log_density_mean
-            #self.decoder_log_density_adjusted -= tf.stop_gradient(self.baseline)
+            self.decoder_log_density_adjusted -= tf.stop_gradient(self.baseline)
             self.decoder_log_density_adjusted = tf.stop_gradient(
                 self.decoder_log_density_adjusted)
             self.nvil_cost = - self.encoder_log_density * \
