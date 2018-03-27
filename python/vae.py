@@ -382,6 +382,11 @@ class NVILVAE(VAE):
         self.z = tf.stop_gradient(self.z)
         self.x_reconst = self._create_decoder_part(self.z)
 
+        if self.encoder_distribution == 'multinomial':
+            shape = (self.batch_size, self.n_samples, self.n_ary * self.n_z)
+            self.z_mean = tf.reshape(self.z_mean, shape)
+        self.x_reconst_mean = self._create_decoder_part(self.z_mean)
+
         n_hidden_encoder_2 = self.network_architecture['encoder']['h2'][1]
         self.baseline_weights = init_weights(n_hidden_encoder_2, 1,  # noqa
                                              name='baseline')
@@ -398,17 +403,27 @@ class NVILVAE(VAE):
     def _create_loss_optimizer(self):
         self._create_loss()
 
+        if self.decoder_distribution == 'multinomial':
+            self.decoder_log_density_mean = compute_log_density(  # noqa
+                x=self.x_binarized, logits=self.x_reconst_mean,
+                distribution=self.decoder_distribution)
+        elif self.decoder_distribution == 'gaussian':
+            self.decoder_log_density_mean = compute_log_density(  # noqa
+                x=self.x_binarized, mu=tf.nn.softmax(self.x_reconst_mean),
+                sigma=1., distribution=self.decoder_distribution)
+
         if self.n_samples_value == 1:
             self.decoder_log_density_adjusted = self.decoder_log_density - \
-                tf.stop_gradient(self.baseline)
+                self.decoder_log_density_mean
+            self.decoder_log_density_adjusted -= tf.stop_gradient(self.baseline)
             self.decoder_log_density_adjusted = tf.stop_gradient(
                 self.decoder_log_density_adjusted)
             self.nvil_cost = - self.encoder_log_density * \
                 self.decoder_log_density_adjusted
             self.cost_for_encoder_weights = tf.reduce_mean(
                 self.kl_divergency + self.nvil_cost)
-            self.cost_for_baseline = tf.reduce_mean(
-                (self.decoder_log_density - self.baseline)**2)
+            self.cost_for_baseline = tf.reduce_mean((self.decoder_log_density
+                - self.decoder_log_density_mean - self.baseline)**2)
         elif self.n_samples_value > 1:
             encoder_log_density = tf.reduce_sum(self.encoder_log_density, 1)
             self.nvil_cost = encoder_log_density * \
