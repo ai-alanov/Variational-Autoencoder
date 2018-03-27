@@ -413,8 +413,7 @@ class NVILVAE(VAE):
                 sigma=1., distribution=self.decoder_distribution)
 
         if self.n_samples_value == 1:
-            self.decoder_log_density_adjusted = self.decoder_log_density - \
-                self.decoder_log_density_mean
+            self.decoder_log_density_adjusted = self.decoder_log_density
             self.decoder_log_density_adjusted -= tf.stop_gradient(self.baseline)
             self.decoder_log_density_adjusted = tf.stop_gradient(
                 self.decoder_log_density_adjusted)
@@ -422,8 +421,8 @@ class NVILVAE(VAE):
                 self.decoder_log_density_adjusted
             self.cost_for_encoder_weights = tf.reduce_mean(
                 self.kl_divergency + self.nvil_cost)
-            self.cost_for_baseline = tf.reduce_mean((self.decoder_log_density
-                - self.decoder_log_density_mean - self.baseline)**2)
+            self.cost_for_baseline = tf.reduce_mean(
+                (self.decoder_log_density - self.baseline)**2)
         elif self.n_samples_value > 1:
             encoder_log_density = tf.reduce_sum(self.encoder_log_density, 1)
             self.nvil_cost = encoder_log_density * \
