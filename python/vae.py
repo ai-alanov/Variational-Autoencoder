@@ -321,12 +321,12 @@ class LogDerTrickVAE(VAE):
 
     def _create_loss_optimizer(self):
         self._create_loss()
-        if self.n_samples_value == 1:
+        if self.n_samples_value == 0:
             self.log_der_trick_cost = - (self.encoder_log_density
                                          * self.decoder_log_density)
             self.cost_for_encoder_weights = tf.reduce_mean(
                 self.kl_divergency + self.log_der_trick_cost)
-        elif self.n_samples_value > 1:
+        elif self.n_samples_value >= 1:
             encoder_log_density = tf.reduce_sum(self.encoder_log_density, 1)
             elbo_stop_grad = tf.stop_gradient(self.multisample_elbo)
             self.log_der_trick_cost = encoder_log_density * elbo_stop_grad
