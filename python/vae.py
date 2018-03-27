@@ -403,7 +403,7 @@ class NVILVAE(VAE):
     def _create_loss_optimizer(self):
         self._create_loss()
 
-        if self.n_samples_value == 1:
+        if self.n_samples_value == 0:
             if self.decoder_distribution == 'multinomial':
                 self.decoder_log_density_mean = compute_log_density(  # noqa
                     x=self.x_binarized, logits=self.x_reconst_mean,
@@ -435,7 +435,7 @@ class NVILVAE(VAE):
                 self.kl_divergency + self.nvil_cost)
             self.cost_for_baseline = tf.reduce_mean(
                 (self.decoder_log_density_adjusted - self.baseline)**2)
-        elif self.n_samples_value > 1:
+        elif self.n_samples_value >= 1:
             encoder_log_density = tf.reduce_sum(self.encoder_log_density, 1)
             self.nvil_cost = encoder_log_density * \
                 tf.stop_gradient((self.multisample_elbo - self.baseline))
