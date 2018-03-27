@@ -516,7 +516,7 @@ class MuPropVAE(VAE):
         self.deterministic_term = tf.reduce_sum(self.jacobian * self.z_mean,
                                                 axis=-1)
 
-        if self.n_samples_value == 1:
+        if self.n_samples_value == 0:
             self.decoder_log_density_adjusted = self.decoder_log_density - \
                 self.decoder_log_density_mean
             self.decoder_log_density_adjusted -= self.linear_part
@@ -525,7 +525,7 @@ class MuPropVAE(VAE):
             self.muprop_cost -= self.deterministic_term
             self.cost_for_encoder_weights = tf.reduce_mean(
                 self.kl_divergency + self.muprop_cost)
-        elif self.n_samples_value > 1:
+        elif self.n_samples_value >= 1:
             self.multisample_elbo_adjusted = self.multisample_elbo - \
                 self.multisample_elbo_mean
             self.multisample_elbo_adjusted -= tf.reduce_sum(
