@@ -690,7 +690,7 @@ def setup_vae_params(params, net_architecture):
         'network_architecture': net_architecture,
         'learning_rate': params['l_r'] or params['l_rs'][0],
         'nonlinearity': params['nonlinearity'],
-        'temperature': params['temperature']
+        'temperature': params['tmpr']
     }
     return vae_params
 
