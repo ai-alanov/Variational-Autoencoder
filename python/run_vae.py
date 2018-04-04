@@ -99,6 +99,8 @@ def main():
     parser.add_option("--n_ary", type='int', help="arity of latent variable")
     parser.add_option("--en_dist", type='string', help="encoder distribution")
     parser.add_option("--l_r", type='float', help="learning rate")
+    parser.add_option("--tmpr", type='float', default = 0.1,
+                      help="temperature for GSoft")
     parser.add_option("--l_rs", type='string', default=[0.001],
                       help="learning rates for validation",
                       action='callback', callback=lrs_callback)

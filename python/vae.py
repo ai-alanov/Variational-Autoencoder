@@ -13,7 +13,7 @@ class VAE(object):
                  learning_rate, encoder_distribution='multinomial',
                  decoder_distribution='multinomial',
                  nonlinearity=tf.nn.softplus, n_ary=None, n_samples=1,
-                 train_bias=None):
+                 train_bias=None, **kwargs):
         self.dataset = dataset
         self.n_input = n_input
         self.n_z = n_z
@@ -541,9 +541,9 @@ class MuPropVAE(VAE):
 
 
 class GumbelSoftmaxTrickVAE(VAE):
-    def __init__(self, *args, temperature=0.1, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.temperature = temperature
+        self.temperature = kwargs['temperature']
 
         if self.encoder_distribution != 'multinomial':
             error_message = ' does not support the {} encoder distribution'

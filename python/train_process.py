@@ -689,7 +689,8 @@ def setup_vae_params(params, net_architecture):
         'encoder_distribution': params['en_dist'],
         'network_architecture': net_architecture,
         'learning_rate': params['l_r'] or params['l_rs'][0],
-        'nonlinearity': params['nonlinearity']
+        'nonlinearity': params['nonlinearity'],
+        'temperature': params['temperature']
     }
     return vae_params
 
