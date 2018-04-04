@@ -580,3 +580,8 @@ class GumbelSoftmaxTrickVAE(VAE):
     def _create_loss_optimizer(self):
         self._create_loss()
         self._create_optimizer()
+
+    def parameters(self, *args, **kwargs):
+        params = super().parameters(*args, **kwargs)
+        params += '-tm{:.1f}'.format(self.temperature)
+        return params
