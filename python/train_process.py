@@ -123,9 +123,9 @@ def save_vae_weights(vaes, sess, epoch, config_params):
         vae.save_weights(sess, os.path.join(save_path, '{}'.format(epoch + 1)))
 
 
-def find_file(vae, save_dir, lr):
+def find_file(vae, save_dir, lr, tmpr=None):
     save_path = os.path.join(save_dir, vae.name(), vae.dataset_name(),
-                             vae.parameters(learning_rate=lr))
+        vae.parameters(learning_rate=lr, temperature=tmpr))
     files = glob.glob(os.path.join(save_path, '*'))
     if not files:
         save_path = save_path[:-1]
@@ -139,7 +139,7 @@ def find_file(vae, save_dir, lr):
     return save_path, now
 
 
-def restore_weights_file(vae, epoch, save_dir, learning_rate):
+def restore_weights_file(vae, epoch, save_dir, learning_rate, temperature=None):
     if isinstance(learning_rate, float):
         val_lr = learning_rate
     elif isinstance(learning_rate, list):
@@ -150,17 +150,18 @@ def restore_weights_file(vae, epoch, save_dir, learning_rate):
         error_message = 'Unsupported type of learning_rate: {}'
         error_message = error_message.format(type(learning_rate))
         raise ValueError(error_message)
-    save_path, now = find_file(vae, save_dir, val_lr)
+    save_path, now = find_file(vae, save_dir, val_lr, tmpr=temperature)
     save_path = os.path.join(save_path, now)
     vae_epoch = epoch if isinstance(epoch, int) else epoch[vae.name()]
     weights_file = os.path.join(save_path, '{}'.format(vae_epoch + 1))
     return weights_file
 
 
-def restore_vae_weights(vaes, sess, epoch, save_dir, learning_rate):
+def restore_vae_weights(vaes, sess, epoch, save_dir,
+                        learning_rate, temperature=None):
     for vae in vaes:
         weights_file = restore_weights_file(vae, epoch, save_dir,
-                                            learning_rate)
+            learning_rate, temperature=temperature)
         vae.restore_weights(sess, weights_file)
 
 
@@ -216,11 +217,13 @@ def save_loss(vaes, loss, save_dir, results_dir, loss_name,
 
 def run_epoch(vaes, sess, input_x, data, n_samples, batch_size,
               obj_samples, is_train=True, need_to_restore=False,
-              save_path=None, epoch=None, learning_rate=None, lr_decay=None):
+              save_path=None, epoch=None, learning_rate=None,
+              temperature=None, lr_decay=None):
     costs = defaultdict(list)
     n_batches = int(n_samples / batch_size)
     if need_to_restore:
-        restore_vae_weights(vaes, sess, epoch, save_path, learning_rate)
+        restore_vae_weights(vaes, sess, epoch, save_path, learning_rate,
+                            temperature=temperature)
     for _ in range(n_batches):
         batch_xs = get_batch(data, batch_size)
         dict_of_tensors = {}
@@ -310,7 +313,8 @@ def grid_search_on_validation(sess, vaes, input_x, val_params, config_params):
                                              input_x, val_params,
                                              need_to_restore=True,
                                              save_path=save_path,
-                                             epoch=epoch, learning_rate=lr)
+                                             epoch=epoch, learning_rate=lr,
+                                             temperature=None)
             for vae in vaes:
                 val_loss[str(lr)][vae.name()].append(val_costs[vae.name()])
     min_loss = defaultdict(lambda: (np.inf, (None, None)))

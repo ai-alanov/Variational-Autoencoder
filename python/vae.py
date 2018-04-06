@@ -241,7 +241,7 @@ class VAE(object):
     def dataset_name(self):
         return self.dataset
 
-    def parameters(self, learning_rate=None, without_lr=False):
+    def parameters(self, learning_rate=None, without_lr=False, **kwargs):
         learning_rate = learning_rate or self.learning_rate_value
         params = '{}-{}n_ary-m{}-nz{}-lr{:.5f}'.format(
             self.encoder_distribution, self.n_ary,
@@ -581,7 +581,8 @@ class GumbelSoftmaxTrickVAE(VAE):
         self._create_loss()
         self._create_optimizer()
 
-    def parameters(self, *args, **kwargs):
+    def parameters(self, *args, temperature=None, **kwargs):
         params = super().parameters(*args, **kwargs)
-        params += '-tm{:.1f}'.format(self.temperature)
+        temperature = temperature or self.temperature
+        params += '-tm{:.1f}'.format(temperature)
         return params
