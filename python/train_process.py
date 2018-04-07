@@ -8,6 +8,7 @@ import glob
 from tqdm import tqdm
 from datetime import datetime
 from collections import defaultdict
+from itertools import product, chain
 import pickle
 
 import matplotlib.pyplot as plt
@@ -123,9 +124,9 @@ def save_vae_weights(vaes, sess, epoch, config_params):
         vae.save_weights(sess, os.path.join(save_path, '{}'.format(epoch + 1)))
 
 
-def find_file(vae, save_dir, lr, tmpr=None):
+def find_file(vae, save_dir, **hyperparams):
     save_path = os.path.join(save_dir, vae.name(), vae.dataset_name(),
-        vae.parameters(learning_rate=lr, temperature=tmpr))
+        vae.parameters(**hyperparams))
     files = glob.glob(os.path.join(save_path, '*'))
     if not files:
         save_path = save_path[:-1]
@@ -139,29 +140,18 @@ def find_file(vae, save_dir, lr, tmpr=None):
     return save_path, now
 
 
-def restore_weights_file(vae, epoch, save_dir, learning_rate, temperature=None):
-    if isinstance(learning_rate, float):
-        val_lr = learning_rate
-    elif isinstance(learning_rate, list):
-        val_lr = learning_rate[0]
-    elif isinstance(learning_rate, dict):
-        val_lr = learning_rate[vae.name()]
-    else:
-        error_message = 'Unsupported type of learning_rate: {}'
-        error_message = error_message.format(type(learning_rate))
-        raise ValueError(error_message)
-    save_path, now = find_file(vae, save_dir, val_lr, tmpr=temperature)
+def restore_weights_file(vae, epoch, save_dir, **hyperparams):
+    save_path, now = find_file(vae, save_dir, **hyperparams)
     save_path = os.path.join(save_path, now)
     vae_epoch = epoch if isinstance(epoch, int) else epoch[vae.name()]
     weights_file = os.path.join(save_path, '{}'.format(vae_epoch + 1))
     return weights_file
 
 
-def restore_vae_weights(vaes, sess, epoch, save_dir,
-                        learning_rate, temperature=None):
+def restore_vae_weights(vaes, sess, epoch, save_dir, **hyperparams):
     for vae in vaes:
         weights_file = restore_weights_file(vae, epoch, save_dir,
-            learning_rate, temperature=temperature)
+                                            **hyperparams)
         vae.restore_weights(sess, weights_file)
 
 
@@ -169,7 +159,7 @@ def load_loss(vaes, learning_rates, save_dir, results_dir, loss_name):
     loss = defaultdict(lambda: defaultdict(list))
     for lr in learning_rates:
         for vae in vaes:
-            save_path, now = find_file(vae, save_dir, lr)
+            save_path, now = find_file(vae, save_dir, learning_rate=lr)
             save_path = os.path.join(save_path, now, results_dir)
             file_name = os.path.join(save_path, loss_name)
             if os.path.exists(file_name):
@@ -189,7 +179,7 @@ def save_loss(vaes, loss, save_dir, results_dir, loss_name,
             pickle.dump(loss, f)
         for vae in vaes:
             lr = learning_rates[vae.name()]
-            save_path, now = find_file(vae, save_dir, lr)
+            save_path, now = find_file(vae, save_dir, learning_rate=lr)
             save_path = os.path.join(save_path, now, results_dir)
             makedirs(save_path)
             file_name = now + '_' + loss_name
@@ -203,7 +193,8 @@ def save_loss(vaes, loss, save_dir, results_dir, loss_name,
     else:
         for lr in list(loss.keys()):
             for vae in vaes:
-                save_path, now = find_file(vae, save_dir, float(lr))
+                save_path, now = find_file(vae, save_dir,
+                                           learning_rate=float(lr))
                 save_path = os.path.join(save_path, now, results_dir)
                 makedirs(save_path)
                 file_name = loss_name
@@ -217,13 +208,11 @@ def save_loss(vaes, loss, save_dir, results_dir, loss_name,
 
 def run_epoch(vaes, sess, input_x, data, n_samples, batch_size,
               obj_samples, is_train=True, need_to_restore=False,
-              save_path=None, epoch=None, learning_rate=None,
-              temperature=None, lr_decay=None):
+              save_path=None, epoch=None, lr_decay=None, **hyperparams):
     costs = defaultdict(list)
     n_batches = int(n_samples / batch_size)
     if need_to_restore:
-        restore_vae_weights(vaes, sess, epoch, save_path, learning_rate,
-                            temperature=temperature)
+        restore_vae_weights(vaes, sess, epoch, save_path, **hyperparams)
     for _ in range(n_batches):
         batch_xs = get_batch(data, batch_size)
         dict_of_tensors = {}
@@ -303,31 +292,40 @@ def train_model(vaes, vae_params, train_params, val_params, test_params,
 
 
 def grid_search_on_validation(sess, vaes, input_x, val_params, config_params):
-    learning_rates = config_params['learning_rates']
+    params_grid = config_params['params_grid']
     save_path = config_params['save_path']
     val_loss = defaultdict(lambda: defaultdict(list))
-    for lr in learning_rates:
+
+    keys, values = zip(*sorted(params_grid.items()))
+    for v in product(*values):
+        hyperparams = dict(zip(keys, v))
         for epoch in tqdm(range(0, config_params['n_epochs'],
                                 config_params['save_step'])):
             val_costs = run_epoch_evaluation(vaes, sess,
                                              input_x, val_params,
                                              need_to_restore=True,
                                              save_path=save_path,
-                                             epoch=epoch, learning_rate=lr,
-                                             temperature=None)
+                                             epoch=epoch, **hyperparams)
             for vae in vaes:
-                val_loss[str(lr)][vae.name()].append(val_costs[vae.name()])
+                val_loss[v][vae.name()].append(val_costs[vae.name()])
+
     min_loss = defaultdict(lambda: (np.inf, (None, None)))
-    for lr in val_loss.keys():
+    for v in val_loss.keys():
         for vae in vaes:
-            n_steps = np.nanargmin(val_loss[str(lr)][vae.name()])
-            min_loss_value = val_loss[str(lr)][vae.name()][n_steps]
-            n_steps *= config_params['save_step']
+            min_index = np.nanargmin(val_loss[v][vae.name()])
+            min_loss_value = val_loss[v][vae.name()][min_index]
+            n_steps = min_index * config_params['save_step']
             if min_loss_value < min_loss[vae.name()][0]:
-                min_loss[vae.name()] = (min_loss_value, (n_steps, float(lr)))
-    optimal_epochs = {vae.name(): min_loss[vae.name()][1][0] for vae in vaes}
-    optimal_lrs = {vae.name(): min_loss[vae.name()][1][1] for vae in vaes}
-    return optimal_epochs, optimal_lrs
+                min_loss[vae.name()] = (min_loss_value,
+                                        (n_steps, dict(zip(keys, v))))
+    epochs = {vae.name(): min_loss[vae.name()][1][0] for vae in vaes}
+    optimal_hyperparams = {
+        key: {
+            vae.name(): min_loss[vae.name()][1][1][key] for vae in vaes
+        }
+        for key in keys
+    }
+    return epochs, optimal_hyperparams
 
 
 def test_model(vaes, vae_params, test_params, val_params,
@@ -336,23 +334,80 @@ def test_model(vaes, vae_params, test_params, val_params,
     vaes, input_x = set_up_vaes(vaes, vae_params)
     sess = set_up_session(vaes, config_params)
 
-    epochs, learning_rates = grid_search_on_validation(
+    epochs, optimal_hyperparams = grid_search_on_validation(
         sess, vaes, input_x, val_params, config_params)
 
     save_path = config_params['save_path']
     test_loss = run_epoch_evaluation(
         vaes, sess, input_x, test_params, need_to_restore=True,
-        save_path=save_path, epoch=epochs, learning_rate=learning_rates)
+        save_path=save_path, epoch=epochs, **optimal_hyperparams)
 
     results_file = create_logging_file(
         config_params['results_dir'], logging_options)
-    output = '{}: loss = {:.4f}, optimal iter = {}, optimal l_r = {}\n'
+    output = '{}: loss = {:.4f}, optimal iter = {}, '
+    output += ', '.join(['optimal {} = {}'] * len(vaes)) + '\n'
     with open(results_file, 'w') as f:
         for name in map(lambda x: x.name(), vaes):
-            f.write(output.format(name, test_loss[name],
-                                  epochs[name], learning_rates[name]))
+            f.write(output.format(
+                name, test_loss[name], epochs[name],
+                *chain([(key, optimal_hyperparams[key][name])
+                        for key in optimal_hyperparams.keys()])))
     sess.close()
     tf.reset_default_graph()
+
+
+# def grid_search_on_validation(sess, vaes, input_x, val_params, config_params):
+#     learning_rates = config_params['learning_rates']
+#     temperatures = config_params['temperatures']
+#     save_path = config_params['save_path']
+#     val_loss = defaultdict(lambda: defaultdict(list))
+#     for lr, tmpr in product(learning_rates, temperatures):
+#         for epoch in tqdm(range(0, config_params['n_epochs'],
+#                                 config_params['save_step'])):
+#             val_costs = run_epoch_evaluation(vaes, sess,
+#                                              input_x, val_params,
+#                                              need_to_restore=True,
+#                                              save_path=save_path,
+#                                              epoch=epoch, learning_rate=lr,
+#                                              temperature=tmpr)
+#             for vae in vaes:
+#                 val_loss[str(lr)][vae.name()].append(val_costs[vae.name()])
+#     min_loss = defaultdict(lambda: (np.inf, (None, None)))
+#     for lr in val_loss.keys():
+#         for vae in vaes:
+#             n_steps = np.nanargmin(val_loss[str(lr)][vae.name()])
+#             min_loss_value = val_loss[str(lr)][vae.name()][n_steps]
+#             n_steps *= config_params['save_step']
+#             if min_loss_value < min_loss[vae.name()][0]:
+#                 min_loss[vae.name()] = (min_loss_value, (n_steps, float(lr)))
+#     optimal_epochs = {vae.name(): min_loss[vae.name()][1][0] for vae in vaes}
+#     optimal_lrs = {vae.name(): min_loss[vae.name()][1][1] for vae in vaes}
+#     return optimal_epochs, optimal_lrs
+#
+#
+# def test_model(vaes, vae_params, test_params, val_params,
+#                config_params, logging_options):
+#     set_up_cuda_devices(config_params['cuda_devices'])
+#     vaes, input_x = set_up_vaes(vaes, vae_params)
+#     sess = set_up_session(vaes, config_params)
+#
+#     epochs, learning_rates = grid_search_on_validation(
+#         sess, vaes, input_x, val_params, config_params)
+#
+#     save_path = config_params['save_path']
+#     test_loss = run_epoch_evaluation(
+#         vaes, sess, input_x, test_params, need_to_restore=True,
+#         save_path=save_path, epoch=epochs, learning_rate=learning_rates)
+#
+#     results_file = create_logging_file(
+#         config_params['results_dir'], logging_options)
+#     output = '{}: loss = {:.4f}, optimal iter = {}, optimal l_r = {}\n'
+#     with open(results_file, 'w') as f:
+#         for name in map(lambda x: x.name(), vaes):
+#             f.write(output.format(name, test_loss[name],
+#                                   epochs[name], learning_rates[name]))
+#     sess.close()
+#     tf.reset_default_graph()
 
 
 def calculate_stds(vaes, batch_xs, n_epochs, save_step, save_path,
@@ -675,11 +730,13 @@ def setup_config_params(params):
         'mem_fraction': params['mem_frac'],
         'results_dir': params['results_dir'],
         'logging_path': params['logging_path'],
-        'learning_rates': params['l_rs'],
+        'params_grid': {'learning_rate': params['l_rs']},
         'n_iterations': params['n_iters'],
         'weights': params['weights'],
         'lr_decay': params['lr_decay']
     }
+    if params['tmprs']:
+        config_params['params_grid'].update({'temperature': params['tmprs']})
     return config_params
 
 
