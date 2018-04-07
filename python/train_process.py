@@ -348,12 +348,10 @@ def test_model(vaes, vae_params, test_params, val_params,
     output += ', '.join(['optimal {} = {}'] * len(vaes)) + '\n'
     with open(results_file, 'w') as f:
         for name in map(lambda x: x.name(), vaes):
-            print(*chain([(key, optimal_hyperparams[key][name])
-                          for key in optimal_hyperparams.keys()]))
             f.write(output.format(
                 name, test_loss[name], epochs[name],
-                *chain([(key, optimal_hyperparams[key][name])
-                        for key in optimal_hyperparams.keys()])))
+                *chain(*[(key, optimal_hyperparams[key][name])
+                         for key in optimal_hyperparams.keys()])))
     sess.close()
     tf.reset_default_graph()
 
