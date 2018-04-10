@@ -28,12 +28,12 @@ def set_up_cuda_devices(cuda_devices):
         os.environ["CUDA_VISIBLE_DEVICES"] = cuda_devices
 
 
-def set_up_vaes(vaes, vae_params):
-    input_x = tf.placeholder(tf.float32, [None, 1, vae_params['n_input']])
+def set_up_vaes(vaes, vae_params_list):
+    input_x = tf.placeholder(tf.float32, [None, 1, vae_params_list['n_input']])
     binary_x = tf.random_uniform(tf.shape(input_x)) <= input_x
     binary_x = tf.cast(binary_x, tf.float32)
-    vae_params['x'] = binary_x
-    vaes = [vae(**vae_params) for vae in vaes]
+    vae_params_list['x'] = binary_x
+    vaes = [vae(**vae_params) for vae in vaes for vae_params in vae_params_list]
     return vaes, input_x
 
 
@@ -270,10 +270,10 @@ def run_epoch_evaluation(vaes, sess, input_x, test_params, **kwargs):
                      is_train=False, **kwargs)
 
 
-def train_model(vaes, vae_params, train_params, val_params, test_params,
+def train_model(vaes, vae_params_list, train_params, val_params, test_params,
                 config_params):
     set_up_cuda_devices(config_params['cuda_devices'])
-    vaes, input_x = set_up_vaes(vaes, vae_params)
+    vaes, input_x = set_up_vaes(vaes, vae_params_list)
     sess = set_up_session(vaes, config_params)
     info_for_evaluation = {
         'val_loss': defaultdict(list),
@@ -328,10 +328,10 @@ def grid_search_on_validation(sess, vaes, input_x, val_params, config_params):
     return epochs, optimal_hyperparams
 
 
-def test_model(vaes, vae_params, test_params, val_params,
+def test_model(vaes, vae_params_list, test_params, val_params,
                config_params, logging_options):
     set_up_cuda_devices(config_params['cuda_devices'])
-    vaes, input_x = set_up_vaes(vaes, vae_params)
+    vaes, input_x = set_up_vaes(vaes, vae_params_list)
     sess = set_up_session(vaes, config_params)
 
     epochs, optimal_hyperparams = grid_search_on_validation(
@@ -354,60 +354,6 @@ def test_model(vaes, vae_params, test_params, val_params,
                          for key in optimal_hyperparams.keys()])))
     sess.close()
     tf.reset_default_graph()
-
-
-# def grid_search_on_validation(sess, vaes, input_x, val_params, config_params):
-#     learning_rates = config_params['learning_rates']
-#     temperatures = config_params['temperatures']
-#     save_path = config_params['save_path']
-#     val_loss = defaultdict(lambda: defaultdict(list))
-#     for lr, tmpr in product(learning_rates, temperatures):
-#         for epoch in tqdm(range(0, config_params['n_epochs'],
-#                                 config_params['save_step'])):
-#             val_costs = run_epoch_evaluation(vaes, sess,
-#                                              input_x, val_params,
-#                                              need_to_restore=True,
-#                                              save_path=save_path,
-#                                              epoch=epoch, learning_rate=lr,
-#                                              temperature=tmpr)
-#             for vae in vaes:
-#                 val_loss[str(lr)][vae.name()].append(val_costs[vae.name()])
-#     min_loss = defaultdict(lambda: (np.inf, (None, None)))
-#     for lr in val_loss.keys():
-#         for vae in vaes:
-#             n_steps = np.nanargmin(val_loss[str(lr)][vae.name()])
-#             min_loss_value = val_loss[str(lr)][vae.name()][n_steps]
-#             n_steps *= config_params['save_step']
-#             if min_loss_value < min_loss[vae.name()][0]:
-#                 min_loss[vae.name()] = (min_loss_value, (n_steps, float(lr)))
-#     optimal_epochs = {vae.name(): min_loss[vae.name()][1][0] for vae in vaes}
-#     optimal_lrs = {vae.name(): min_loss[vae.name()][1][1] for vae in vaes}
-#     return optimal_epochs, optimal_lrs
-#
-#
-# def test_model(vaes, vae_params, test_params, val_params,
-#                config_params, logging_options):
-#     set_up_cuda_devices(config_params['cuda_devices'])
-#     vaes, input_x = set_up_vaes(vaes, vae_params)
-#     sess = set_up_session(vaes, config_params)
-#
-#     epochs, learning_rates = grid_search_on_validation(
-#         sess, vaes, input_x, val_params, config_params)
-#
-#     save_path = config_params['save_path']
-#     test_loss = run_epoch_evaluation(
-#         vaes, sess, input_x, test_params, need_to_restore=True,
-#         save_path=save_path, epoch=epochs, learning_rate=learning_rates)
-#
-#     results_file = create_logging_file(
-#         config_params['results_dir'], logging_options)
-#     output = '{}: loss = {:.4f}, optimal iter = {}, optimal l_r = {}\n'
-#     with open(results_file, 'w') as f:
-#         for name in map(lambda x: x.name(), vaes):
-#             f.write(output.format(name, test_loss[name],
-#                                   epochs[name], learning_rates[name]))
-#     sess.close()
-#     tf.reset_default_graph()
 
 
 def calculate_stds(vaes, batch_xs, n_epochs, save_step, save_path,
@@ -444,9 +390,9 @@ def calculate_stds2(vaes, sess, input_x, batch_xs, config_params,
     return stds
 
 
-def plot_stds(vaes, vae_params, train_params, config_params):
+def plot_stds(vaes, vae_params_list, train_params, config_params):
     set_up_cuda_devices(config_params['cuda_devices'])
-    vaes, input_x = set_up_vaes(vaes, vae_params)
+    vaes, input_x = set_up_vaes(vaes, vae_params_list)
     sess = set_up_session(vaes, config_params)
     batch_xs = get_batch(train_params['data'], train_params['batch_size'])
     all_weights = {vae.name(): vae for vae in vaes}
@@ -484,10 +430,10 @@ def plot_stds(vaes, vae_params, train_params, config_params):
     plt.show()
 
 
-def consider_stds(vaes, vae_params, data, n_epochs, batch_size, n_iterations,
+def consider_stds(vaes, vae_params_list, data, n_epochs, batch_size, n_iterations,
                   save_step, save_path, cuda_devices):
     set_up_cuda_devices('cuda_devices')
-    vaes = set_up_vaes(vaes, vae_params)
+    vaes = set_up_vaes(vaes, vae_params_list)
     batch_xs = get_batch(data, batch_size)
 
     encoder_stds = calculate_stds(vaes, batch_xs, n_epochs, save_step,
@@ -741,7 +687,7 @@ def setup_config_params(params):
 
 
 def setup_vae_params(params, net_architecture):
-    vae_params = {
+    vae_params_template = {
         'dataset': params['dataset'],
         'n_input': params['X_train'].images.shape[1],
         'n_z': params['n_z'],
@@ -749,11 +695,18 @@ def setup_vae_params(params, net_architecture):
         'n_samples': params['train_obj_samples'],
         'encoder_distribution': params['en_dist'],
         'network_architecture': net_architecture,
-        'learning_rate': params['l_r'] or params['l_rs'][0],
-        'nonlinearity': params['nonlinearity'],
-        'temperature': params['tmpr']
+        'learning_rate': [params['l_r']] if params['l_r'] else params['l_rs'],
+        'temperature': [params['tmpr']] if params['tmpr'] else params['tmprs'],
+        'nonlinearity': params['nonlinearity']
     }
-    return vae_params
+    vae_params_list = []
+    for lr in vae_params_template['learning_rate']:
+        for tmpr in vae_params_template['temperature']:
+            vae_params = vae_params_template.copy()
+            vae_params['learning_rate'] = lr
+            vae_params['temperature'] = tmpr
+            vae_params_list.append(vae_params)
+    return vae_params_list
 
 
 def set_up_logging_options(params):
@@ -780,7 +733,7 @@ def setup_vaes_and_params(params):
 
     config_params = setup_config_params(params)
 
-    vae_params = setup_vae_params(params, net_architecture)
+    vae_params_list = setup_vae_params(params, net_architecture)
 
     test_logging_options = set_up_logging_options(params)
 
@@ -790,7 +743,7 @@ def setup_vaes_and_params(params):
 
     input_vaes_and_params = {
         'vaes': vaes,
-        'vae_params': vae_params,
+        'vae_params_list': vae_params_list,
         'train_params': train_params,
         'val_params': val_params,
         'test_params': test_params,
