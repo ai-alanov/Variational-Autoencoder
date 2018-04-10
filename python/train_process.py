@@ -35,6 +35,7 @@ def set_up_vaes(vaes, vae_params_list):
     for vae_params in vae_params_list:
         vae_params['x'] = binary_x
     vaes = [vae(**vae_params) for vae in vaes for vae_params in vae_params_list]
+    print('number of vaes: ', len(vaes))
     return vaes, input_x
 
 
