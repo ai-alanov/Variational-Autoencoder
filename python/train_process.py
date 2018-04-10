@@ -700,12 +700,18 @@ def setup_vae_params(params, net_architecture):
         'nonlinearity': params['nonlinearity']
     }
     vae_params_list = []
-    for lr in vae_params_template['learning_rate']:
-        for tmpr in vae_params_template['temperature']:
-            vae_params = vae_params_template.copy()
-            vae_params['learning_rate'] = lr
-            vae_params['temperature'] = tmpr
-            vae_params_list.append(vae_params)
+    if params['mode'] == 'test':
+        vae_params = vae_params_template.copy()
+        vae_params['learning_rate'] = vae_params['learning_rate'][0]
+        vae_params['temperature'] = vae_params['temperature'][0]
+        vae_params_list.append(vae_params)
+    else:
+        for lr in vae_params_template['learning_rate']:
+            for tmpr in vae_params_template['temperature']:
+                vae_params = vae_params_template.copy()
+                vae_params['learning_rate'] = lr
+                vae_params['temperature'] = tmpr
+                vae_params_list.append(vae_params)
     return vae_params_list
 
 
