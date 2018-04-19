@@ -72,7 +72,8 @@ def log_output(output, logging_path=None):
 
 def print_costs(vaes, epoch, stage, config_params, test_costs, val_costs=None,
                 train_costs=None, logging_path=None):
-    log_output('epoch = {}, stage = {}'.format(epoch, stage), logging_path)
+    #log_output('epoch = {}, stage = {}'.format(epoch, stage), logging_path)
+    logging.info('epoch = {}, stage = {}'.format(epoch, stage))
     for vae in vaes:
         vae_name = vae.name()
         data_names = ['test', 'validation', 'train']
@@ -89,7 +90,8 @@ def print_costs(vaes, epoch, stage, config_params, test_costs, val_costs=None,
         lr_decay = config_params['lr_decay'](stage)
         learning_rate = vae.learning_rate_value * lr_decay
         all_output += 'learning rate = {:.5f}'.format(learning_rate)
-        log_output(all_output, logging_path, flush=True)
+        #log_output(all_output, logging_path, flush=True)
+        logging.info(all_output)
 
 
 def plot_loss(vaes, test_loss, val_loss, epoch, step,
