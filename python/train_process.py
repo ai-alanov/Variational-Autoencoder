@@ -30,6 +30,7 @@ def set_up_cuda_devices(cuda_devices):
 
 
 def set_up_vaes(vaes, vae_params_list):
+    logging.debug(len(vae_params_list), vae_params_list)
     input_x = tf.placeholder(tf.float32, [None, 1, vae_params_list[0]['n_input']])
     binary_x = tf.random_uniform(tf.shape(input_x)) <= input_x
     binary_x = tf.cast(binary_x, tf.float32)
