@@ -6,6 +6,7 @@ from functools import partial
 import sys
 import os
 import warnings
+import logging
 
 import matplotlib
 matplotlib.use('Agg')
@@ -181,6 +182,7 @@ def main():
                     for k, v in vars(options).items()}
 
     logging_path = create_logging_file('logs', options_dict)
+    logging.basicConfig(filename=logging_path, level=logging.DEBUG)
 
     if options.dataset == 'BinaryMNIST':
         data = get_fixed_mnist('datasets/', validation_size=options.valid_size)

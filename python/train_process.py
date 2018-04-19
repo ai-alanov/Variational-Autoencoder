@@ -5,6 +5,7 @@ import tensorflow as tf
 import os
 import sys
 import glob
+import logging
 from tqdm import tqdm
 from datetime import datetime
 from collections import defaultdict
@@ -35,7 +36,6 @@ def set_up_vaes(vaes, vae_params_list):
     for vae_params in vae_params_list:
         vae_params['x'] = binary_x
     vaes = [vae(**vae_params) for vae in vaes for vae_params in vae_params_list]
-    print('number of vaes: ', len(vaes))
     return vaes, input_x
 
 
@@ -62,12 +62,11 @@ def clear_output():
         display.clear_output()
 
 
-def log_output(output, logging_path=None, **kwargs):
-    if sys.stdout.isatty() or (logging_path is not None):
-        with open(logging_path, 'a') as f:
-            print(output, file=f, **kwargs)
+def log_output(output, logging_path=None):
+    if logging_path:
+        logging.info(output)
     else:
-        print(output, **kwargs)
+        print(output)
 
 
 def print_costs(vaes, epoch, stage, config_params, test_costs, val_costs=None,
