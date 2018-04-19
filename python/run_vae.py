@@ -184,6 +184,19 @@ def main():
     logging_path = create_logging_file('logs', options_dict)
     logging.basicConfig(filename=logging_path, level=logging.DEBUG)
 
+    log = logging.getLogger('tensorflow')
+    log.setLevel(logging.DEBUG)
+
+    # create formatter and add it to the handlers
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+    # create file handler which logs even debug messages
+    fh = logging.FileHandler(logging_path)
+    fh.setLevel(logging.DEBUG)
+    fh.setFormatter(formatter)
+    log.addHandler(fh)
+
     if options.dataset == 'BinaryMNIST':
         data = get_fixed_mnist('datasets/', validation_size=options.valid_size)
     elif 'OMNIGLOT' in options.dataset:
