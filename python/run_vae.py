@@ -184,7 +184,7 @@ def main():
     logging_path = create_logging_file('logs', options_dict)
     logging.basicConfig(filename=logging_path, level=logging.DEBUG)
 
-    log = logging.getLogger('W')
+    log = logging.getLogger('tensorflow/core/platform/cpu_feature_guard.cc')
     log.setLevel(logging.DEBUG)
 
     # create formatter and add it to the handlers
