@@ -102,7 +102,7 @@ def main():
     parser.add_option("--l_r", type='float', help="learning rate")
     parser.add_option("--tmpr", type='float',
                       help="temperature for GSoft")
-    parser.add_option("--tmprs", type='string', default=[],
+    parser.add_option("--tmprs", type='string', default=[0.1],
                       help="temperatures for validation",
                       action='callback', callback=lrs_callback)
     parser.add_option("--l_rs", type='string', default=[0.001],
