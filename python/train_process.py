@@ -30,7 +30,7 @@ def set_up_cuda_devices(cuda_devices):
 
 
 def set_up_vaes(vaes, vae_params_list):
-    logging.debug(len(vae_params_list), vae_params_list)
+    logging.debug(str(len(vae_params_list)))
     input_x = tf.placeholder(tf.float32, [None, 1, vae_params_list[0]['n_input']])
     binary_x = tf.random_uniform(tf.shape(input_x)) <= input_x
     binary_x = tf.cast(binary_x, tf.float32)
@@ -702,6 +702,7 @@ def setup_vae_params(params, net_architecture):
         'nonlinearity': params['nonlinearity']
     }
     vae_params_list = []
+    logging.debug(str((len(ae_params_template['learning_rate']), len(vae_params_template['temperature']))))
     if params['mode'] == 'test':
         vae_params = vae_params_template.copy()
         vae_params['learning_rate'] = vae_params['learning_rate'][0]
