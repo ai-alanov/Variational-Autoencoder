@@ -702,7 +702,7 @@ def setup_vae_params(params, net_architecture):
         'nonlinearity': params['nonlinearity']
     }
     vae_params_list = []
-    logging.debug(str((len(ae_params_template['learning_rate']), len(vae_params_template['temperature']))))
+    logging.debug(str((len(vae_params_template['learning_rate']), len(vae_params_template['temperature']))))
     if params['mode'] == 'test':
         vae_params = vae_params_template.copy()
         vae_params['learning_rate'] = vae_params['learning_rate'][0]
