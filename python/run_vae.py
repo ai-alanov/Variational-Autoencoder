@@ -200,8 +200,8 @@ def main():
             self.logger = logger
 
         def write(self, buf):
+            self.stderr.write(buf)
             for line in buf.rstrip().splitlines():
-                self.stderr.write(line.rstrip())
                 self.logger.error(line.rstrip())
 
     stderr_logger = logging.getLogger('STDERR')
