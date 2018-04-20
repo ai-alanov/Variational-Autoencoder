@@ -183,7 +183,7 @@ def main():
     logger = logging.getLogger('run_vae')
     logger.setLevel(logging.DEBUG)
     file_handler = logging.FileHandler(log_file)
-    log_format = '%(levelname)s - %(asctime)s - %(name)s\n%(message)s'
+    log_format = '%(levelname)s - %(asctime)s - %(name)s: %(message)s'
     formatter = logging.Formatter(log_format, datefmt='%Y-%m-%d %H:%M:%S')
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
@@ -203,8 +203,9 @@ def main():
                 self.logger.error(line.rstrip())
 
     stderr_logger = logging.getLogger('STDERR')
-    file_handler.setFormatter(logging.Formatter('%(name)s: %(message)s'))
-    stderr_logger.addHandler(file_handler)
+    stderr_handler = logging.FileHandler(log_file)
+    stderr_handler.setFormatter(logging.Formatter('%(name)s: %(message)s'))
+    stderr_logger.addHandler(stderr_handler)
     sys.stderr = StreamToLogger(stderr_logger)
 
     if options.dataset == 'BinaryMNIST':
