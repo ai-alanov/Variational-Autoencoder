@@ -195,18 +195,20 @@ def main():
 
     class StreamToLogger(object):
 
-        def __init__(self, logger):
+        def __init__(self, stderr, logger):
+            self.stderr = stderr
             self.logger = logger
 
         def write(self, buf):
             for line in buf.rstrip().splitlines():
+                self.stderr.write(line.rstrip())
                 self.logger.error(line.rstrip())
 
     stderr_logger = logging.getLogger('STDERR')
     stderr_handler = logging.FileHandler(log_file)
     stderr_handler.setFormatter(logging.Formatter('%(name)s: %(message)s'))
     stderr_logger.addHandler(stderr_handler)
-    sys.stderr = StreamToLogger(stderr_logger)
+    sys.stderr = StreamToLogger(sys.stderr, stderr_logger)
 
     if options.dataset == 'BinaryMNIST':
         data = get_fixed_mnist('datasets/', validation_size=options.valid_size)
