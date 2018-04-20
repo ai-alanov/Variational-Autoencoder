@@ -67,7 +67,7 @@ def print_costs(vaes, epoch, stage, config_params, test_costs, val_costs=None,
     #log_output('epoch = {}, stage = {}'.format(epoch, stage), logging_path)
     #logging.info('epoch = {}, stage = {}'.format(epoch, stage))
     logger = logging.getLogger('run_vae.print_costs')
-    print(len(logger.handlers))
+    print('number of handlers: ', len(logger.handlers))
     logger.info('epoch = {}, stage = {}'.format(epoch, stage))
     for vae in vaes:
         vae_name = vae.name()
