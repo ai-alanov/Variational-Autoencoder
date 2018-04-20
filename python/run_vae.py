@@ -180,29 +180,19 @@ def main():
                     for k, v in vars(options).items()}
     log_file = create_logging_file('logs', options_dict)
 
-    logger = logging.getLogger("run_vae")
+    logger = logging.getLogger('run_vae')
     logger.setLevel(logging.DEBUG)
+    file_handler = logging.FileHandler(log_file)
+    log_format = '%(levelname)s:%(asctime)s:%(name)s\n%(message)s'
+    formatter = logging.Formatter(log_format, datefmt='%Y-%m-%d,%H-%M-%S')
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+    print(len(logger.handlers))
 
-    fh = logging.FileHandler('log.txt')
-
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    fh.setFormatter(formatter)
-    logger.addHandler(fh)
-
-    # logger = logging.getLogger('run_vae')
-    # logger.setLevel(logging.DEBUG)
-    # file_handler = logging.FileHandler(log_file)
-    # log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    # formatter = logging.Formatter(log_format)
-    # file_handler.setFormatter(formatter)
-    # logger.addHandler(file_handler)
-    # print(len(logger.handlers))
-    #
-    # tf_logger = logging.getLogger('tensorflow')
-    # tf_logger.propagate = False
-    # tf_logger.setLevel(logging.DEBUG)
-    # tf_logger.addHandler(file_handler)
+    tf_logger = logging.getLogger('tensorflow')
+    tf_logger.propagate = False
+    tf_logger.setLevel(logging.DEBUG)
+    tf_logger.addHandler(file_handler)
 
     if options.dataset == 'BinaryMNIST':
         data = get_fixed_mnist('datasets/', validation_size=options.valid_size)

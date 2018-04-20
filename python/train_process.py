@@ -64,12 +64,8 @@ def clear_output():
 
 def print_costs(vaes, epoch, stage, config_params, test_costs, val_costs=None,
                 train_costs=None, logging_path=None):
-    #log_output('epoch = {}, stage = {}'.format(epoch, stage), logging_path)
-    #logging.info('epoch = {}, stage = {}'.format(epoch, stage))
     logger = logging.getLogger('run_vae.print_costs')
     logger.info('epoch = {}, stage = {}'.format(epoch, stage))
-    print('number of handlers: ', len(logger.handlers))
-    print('Hi!')
     for vae in vaes:
         vae_name = vae.name()
         data_names = ['test', 'validation', 'train']
@@ -86,8 +82,6 @@ def print_costs(vaes, epoch, stage, config_params, test_costs, val_costs=None,
         lr_decay = config_params['lr_decay'](stage)
         learning_rate = vae.learning_rate_value * lr_decay
         all_output += 'learning rate = {:.5f}'.format(learning_rate)
-        #log_output(all_output, logging_path, flush=True)
-        #logging.info(all_output)
         logger.info(all_output)
 
 
@@ -701,7 +695,6 @@ def setup_vae_params(params, net_architecture):
         'nonlinearity': params['nonlinearity']
     }
     vae_params_list = []
-    logging.debug(str((len(vae_params_template['learning_rate']), len(vae_params_template['temperature']))))
     if params['mode'] == 'test':
         vae_params = vae_params_template.copy()
         vae_params['learning_rate'] = vae_params['learning_rate'][0]
