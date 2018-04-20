@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
-import numpy as np
-import tensorflow as tf
-from optparse import OptionParser
-from functools import partial
 import sys
 import os
 import warnings
 import logging
+import numpy as np
+from optparse import OptionParser
+from functools import partial
 
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt  # noqa
 import seaborn as sns  # noqa
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+import tensorflow as tf # noqa
 
 sys.path.append('../python/')
 from utils import makedirs, create_logging_file  # noqa
@@ -26,11 +28,6 @@ sns.set_context(
     'paper',
     font_scale=2.0,
     rc={'lines.linewidth': 2, 'lines.markersize': 10, 'figsize': (5, 4.8)})
-
-tf.logging.set_verbosity(tf.logging.ERROR)
-tf.logging.set_verbosity(tf.logging.WARN)
-tf.logging.set_verbosity(tf.logging.DEBUG)
-tf.logging.set_verbosity(tf.logging.FATAL)
 
 warnings.filterwarnings('ignore', module='matplotlib')
 
