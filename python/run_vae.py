@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt  # noqa
 import seaborn as sns  # noqa
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-import tensorflow as tf # noqa
+import tensorflow as tf  # noqa
 tf.logging.set_verbosity(tf.logging.WARN)
 
 sys.path.append('../python/')
@@ -178,21 +178,31 @@ def main():
 
     options_dict = {k: v if not callable(v) else callable_options_dict[k]
                     for k, v in vars(options).items()}
-
     log_file = create_logging_file('logs', options_dict)
-    logger = logging.getLogger('run_vae')
-    logger.setLevel(logging.DEBUG)
-    file_handler = logging.FileHandler(log_file)
-    log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    formatter = logging.Formatter(log_format)
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
-    print(len(logger.handlers))
 
-    tf_logger = logging.getLogger('tensorflow')
-    tf_logger.propagate = False
-    tf_logger.setLevel(logging.DEBUG)
-    tf_logger.addHandler(file_handler)
+    logger = logging.getLogger("run_vae")
+    logger.setLevel(logging.DEBUG)
+
+    fh = logging.FileHandler(log_file)
+
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    fh.setFormatter(formatter)
+    logger.addHandler(fh)
+
+    # logger = logging.getLogger('run_vae')
+    # logger.setLevel(logging.DEBUG)
+    # file_handler = logging.FileHandler(log_file)
+    # log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    # formatter = logging.Formatter(log_format)
+    # file_handler.setFormatter(formatter)
+    # logger.addHandler(file_handler)
+    # print(len(logger.handlers))
+    #
+    # tf_logger = logging.getLogger('tensorflow')
+    # tf_logger.propagate = False
+    # tf_logger.setLevel(logging.DEBUG)
+    # tf_logger.addHandler(file_handler)
 
     if options.dataset == 'BinaryMNIST':
         data = get_fixed_mnist('datasets/', validation_size=options.valid_size)
