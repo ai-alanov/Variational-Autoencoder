@@ -194,6 +194,19 @@ def main():
     tf_logger.setLevel(logging.DEBUG)
     tf_logger.addHandler(file_handler)
 
+    class StreamToLogger(object):
+
+        def __init__(self, logger):
+            self.logger = logger
+
+        def write(self, buf):
+            for line in buf.rstrip().splitlines():
+                self.logger.error(line.rstrip())
+
+    stderr_logger = logging.getLogger('STDERR')
+    stderr_logger.addHandler(file_handler)
+    sys.stderr = StreamToLogger(stderr_logger)
+
     if options.dataset == 'BinaryMNIST':
         data = get_fixed_mnist('datasets/', validation_size=options.valid_size)
     elif 'OMNIGLOT' in options.dataset:
