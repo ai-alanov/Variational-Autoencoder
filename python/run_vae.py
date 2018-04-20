@@ -190,6 +190,7 @@ def main():
     print(len(logger.handlers))
 
     tf_logger = logging.getLogger('tensorflow')
+    tf_logger.propagate = False
     tf_logger.setLevel(logging.DEBUG)
     tf_logger.addHandler(file_handler)
 
