@@ -83,7 +83,6 @@ def print_costs(vaes, epoch, stage, config_params, test_costs, val_costs=None,
         learning_rate = vae.learning_rate_value * lr_decay
         all_output += 'learning rate = {:.5f}'.format(learning_rate)
         logger.info(all_output)
-    print(1 / 0)
 
 
 def plot_loss(vaes, test_loss, val_loss, epoch, step,
