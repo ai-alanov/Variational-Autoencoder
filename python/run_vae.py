@@ -187,7 +187,6 @@ def main():
     formatter = logging.Formatter(log_format, datefmt='%Y-%m-%d %H:%M:%S')
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
-    print(len(logger.handlers))
 
     tf_logger = logging.getLogger('tensorflow')
     tf_logger.propagate = False
@@ -204,6 +203,7 @@ def main():
                 self.logger.error(line.rstrip())
 
     stderr_logger = logging.getLogger('STDERR')
+    file_handler.setFormatter(logging.Formatter('%(name)s: %(message)s'))
     stderr_logger.addHandler(file_handler)
     sys.stderr = StreamToLogger(stderr_logger)
 
