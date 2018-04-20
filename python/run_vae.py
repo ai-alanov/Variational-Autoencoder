@@ -180,7 +180,7 @@ def main():
                     for k, v in vars(options).items()}
 
     log_file = create_logging_file('logs', options_dict)
-    logger = logging.getLogger('run_vae.py')
+    logger = logging.getLogger('run_vae')
     logger.setLevel(logging.DEBUG)
     file_handler = logging.FileHandler(log_file)
     log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -189,6 +189,7 @@ def main():
     logger.addHandler(file_handler)
 
     tf_logger = logging.getLogger('tensorflow')
+    tf_logger.setLevel(logging.DEBUG)
     tf_logger.addHandler(file_handler)
 
     if options.dataset == 'BinaryMNIST':

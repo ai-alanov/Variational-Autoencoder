@@ -30,7 +30,6 @@ def set_up_cuda_devices(cuda_devices):
 
 
 def set_up_vaes(vaes, vae_params_list):
-    logging.debug(str(len(vae_params_list)))
     input_x = tf.placeholder(tf.float32, [None, 1, vae_params_list[0]['n_input']])
     binary_x = tf.random_uniform(tf.shape(input_x)) <= input_x
     binary_x = tf.cast(binary_x, tf.float32)
@@ -63,17 +62,12 @@ def clear_output():
         display.clear_output()
 
 
-def log_output(output, logging_path=None):
-    if logging_path:
-        logging.info(output)
-    else:
-        print(output)
-
-
 def print_costs(vaes, epoch, stage, config_params, test_costs, val_costs=None,
                 train_costs=None, logging_path=None):
     #log_output('epoch = {}, stage = {}'.format(epoch, stage), logging_path)
-    logging.info('epoch = {}, stage = {}'.format(epoch, stage))
+    #logging.info('epoch = {}, stage = {}'.format(epoch, stage))
+    logger = logging.getLogger('run_vae.print_costs')
+    logger.info('epoch = {}, stage = {}'.format(epoch, stage))
     for vae in vaes:
         vae_name = vae.name()
         data_names = ['test', 'validation', 'train']
@@ -91,7 +85,8 @@ def print_costs(vaes, epoch, stage, config_params, test_costs, val_costs=None,
         learning_rate = vae.learning_rate_value * lr_decay
         all_output += 'learning rate = {:.5f}'.format(learning_rate)
         #log_output(all_output, logging_path, flush=True)
-        logging.info(all_output)
+        #logging.info(all_output)
+        logger.info(all_output)
 
 
 def plot_loss(vaes, test_loss, val_loss, epoch, step,
