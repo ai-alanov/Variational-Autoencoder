@@ -181,7 +181,7 @@ def main():
     log_file = create_logging_file('logs', options_dict)
 
     logger = logging.getLogger('run_vae')
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
     file_handler = logging.FileHandler(log_file)
     log_format = '%(levelname)s:%(asctime)s:%(name)s: %(message)s'
     formatter = logging.Formatter(log_format, datefmt='%Y-%m-%d:%H-%M-%S')
@@ -190,7 +190,7 @@ def main():
 
     tf_logger = logging.getLogger('tensorflow')
     tf_logger.propagate = False
-    tf_logger.setLevel(logging.DEBUG)
+    tf_logger.setLevel(logging.WARNING)
     tf_logger.addHandler(file_handler)
 
     class StreamToLogger(object):
