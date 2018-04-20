@@ -183,8 +183,8 @@ def main():
     logger = logging.getLogger('run_vae')
     logger.setLevel(logging.DEBUG)
     file_handler = logging.FileHandler(log_file)
-    log_format = '%(levelname)s:%(asctime)s:%(name)s\n%(message)s'
-    formatter = logging.Formatter(log_format, datefmt='%Y-%m-%d,%H-%M-%S')
+    log_format = '%(levelname)s - %(asctime)s - %(name)s\n%(message)s'
+    formatter = logging.Formatter(log_format, datefmt='%Y-%m-%d %H:%M:%S')
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
     print(len(logger.handlers))
