@@ -14,6 +14,7 @@ import seaborn as sns  # noqa
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import tensorflow as tf # noqa
+tf.logging.set_verbosity(tf.logging.WARN)
 
 sys.path.append('../python/')
 from utils import makedirs, create_logging_file  # noqa
@@ -178,21 +179,17 @@ def main():
     options_dict = {k: v if not callable(v) else callable_options_dict[k]
                     for k, v in vars(options).items()}
 
-    logging_path = create_logging_file('logs', options_dict)
-    logging.basicConfig(filename=logging_path, level=logging.DEBUG)
+    log_file = create_logging_file('logs', options_dict)
+    logger = logging.getLogger('run_vae.py')
+    logger.setLevel(logging.DEBUG)
+    file_handler = logging.FileHandler(log_file)
+    log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    formatter = logging.Formatter(log_format)
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
 
-    log = logging.getLogger('tensorflow/core/platform/cpu_feature_guard.cc')
-    log.setLevel(logging.DEBUG)
-
-    # create formatter and add it to the handlers
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
-    # create file handler which logs even debug messages
-    fh = logging.FileHandler(logging_path)
-    fh.setLevel(logging.DEBUG)
-    fh.setFormatter(formatter)
-    log.addHandler(fh)
+    tf_logger = logging.getLogger('tensorflow')
+    tf_logger.addHandler(file_handler)
 
     if options.dataset == 'BinaryMNIST':
         data = get_fixed_mnist('datasets/', validation_size=options.valid_size)
@@ -204,7 +201,7 @@ def main():
     params = vars(options)
     params = dict({'X_train': X_train, 'X_test': X_test, 'X_val': X_val},
                   **params)
-    params['logging_path'] = logging_path
+    params['log_file'] = log_file
     params['n_stages'] = options.n_stages if options.n_stages else 1
     params['stage_to_epochs'] = (options.stage_to_epochs if options.n_stages
                                  else lambda x: options.n_epochs)
