@@ -187,6 +187,7 @@ def main():
     formatter = logging.Formatter(log_format)
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
+    print(len(logger.handlers))
 
     tf_logger = logging.getLogger('tensorflow')
     tf_logger.setLevel(logging.DEBUG)
