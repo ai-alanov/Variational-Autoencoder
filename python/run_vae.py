@@ -183,7 +183,7 @@ def main():
     logger = logging.getLogger("run_vae")
     logger.setLevel(logging.DEBUG)
 
-    fh = logging.FileHandler(log_file)
+    fh = logging.FileHandler('log.txt')
 
     formatter = logging.Formatter(
         '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
