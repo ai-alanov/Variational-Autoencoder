@@ -251,7 +251,7 @@ def logging_experiment(epoch, stage, vaes, sess, input_x, train_costs,
 def run_train_stage(vaes, sess, input_x, train_params, config_params,
                     info_for_evaluation, current_epoch, stage, **kwargs):
     n_epochs = config_params['stage_to_epochs'](stage)
-    for epoch in tqdm(range(n_epochs)):
+    for epoch in tqdm(range(n_epochs), file=sys.stdout):
         train_costs = run_epoch(vaes, sess, input_x, **train_params, **kwargs)
         if not current_epoch % config_params['display_step']:
             logging_experiment(current_epoch, stage, vaes, sess, input_x,
@@ -278,7 +278,7 @@ def train_model(vaes, vae_params_list, train_params, val_params, test_params,
         'test_params': test_params
     }
     current_epoch = 0
-    for stage in tqdm(range(config_params['n_stages'])):
+    for stage in tqdm(range(config_params['n_stages']), file=sys.stdout):
         lr_decay = config_params['lr_decay'](stage)
         train_costs, current_epoch = run_train_stage(
             vaes, sess, input_x, train_params, config_params,
@@ -296,7 +296,7 @@ def grid_search_on_validation(sess, vaes, input_x, val_params, config_params):
     for v in product(*values):
         hyperparams = dict(zip(keys, v))
         for epoch in tqdm(range(0, config_params['n_epochs'],
-                                config_params['save_step'])):
+                                config_params['save_step']), file=sys.stdout):
             val_costs = run_epoch_evaluation(vaes, sess,
                                              input_x, val_params,
                                              need_to_restore=True,
@@ -355,7 +355,7 @@ def test_model(vaes, vae_params_list, test_params, val_params,
 def calculate_stds(vaes, batch_xs, n_epochs, save_step, save_path,
                    n_iterations, vae_part):
     stds = defaultdict(lambda: defaultdict(list))
-    for weights_name in tqdm(map(lambda x: x.name(), vaes)):
+    for weights_name in tqdm(map(lambda x: x.name(), vaes), file=sys.stdout):
         for vae in vaes:
             if vae.name() == 'NVILVAE' and weights_name != 'NVILVAE':
                 continue
@@ -371,9 +371,10 @@ def calculate_stds(vaes, batch_xs, n_epochs, save_step, save_path,
 def calculate_stds2(vaes, sess, input_x, batch_xs, config_params,
                     vae_part, weights):
     stds = defaultdict(list)
-    for vae in tqdm(vaes):
+    for vae in tqdm(vaes, file=sys.stdout):
         for saved_index in tqdm(range(0, config_params['n_epochs'],
-                                      config_params['save_step'])):
+                                      config_params['save_step']),
+                                file=sys.stdout):
             weights_file = restore_weights_file(
                 vae, saved_index,
                 config_params['save_path'],
