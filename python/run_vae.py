@@ -180,7 +180,7 @@ def main():
                     for k, v in vars(options).items()}
 
     log_file = create_logging_file('logs', options_dict)
-    logger = logging.getLogger('run_vae')
+    logger = logging.getLogger(__name__)
     logger.setLevel(logging.DEBUG)
     file_handler = logging.FileHandler(log_file)
     log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
