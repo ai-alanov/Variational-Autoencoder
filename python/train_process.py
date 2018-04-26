@@ -67,13 +67,14 @@ def print_costs(vaes, epoch, stage, config_params=None, test_costs=None, val_cos
     logger = logging.getLogger('run_vae.print_costs')
     logger.info('epoch = {}, stage = {}'.format(epoch, stage))
     for vae in vaes:
-        vae_name = vae.name() + '-' + vae.parameters()
+        vae_name = vae.name()
         data_names = ['test', 'validation', 'train']
         costs = {
             'test': test_costs[vae_name] if test_costs else None,
             'validation': val_costs[vae_name] if val_costs else None,
             'train': train_costs[vae_name] if train_costs else None
         }
+        vae_name += '-' + vae.parameters()
         all_output = vae_name + ', '
         for name in data_names:
             output = '{} cost = {:.5f} '
