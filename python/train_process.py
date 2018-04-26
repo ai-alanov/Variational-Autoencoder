@@ -67,7 +67,7 @@ def print_costs(vaes, epoch, stage, config_params=None, test_costs=None,
     logger = logging.getLogger('run_vae.print_costs')
     logger.info('epoch = {}, stage = {}'.format(epoch, stage))
     for vae in vaes:
-        vae_name = vae.name()
+        vae_name = vae.name() + vae.parameters()
         data_names = ['test', 'validation', 'train']
         costs = {
             'test': test_costs[vae_name] if test_costs else None,
@@ -79,7 +79,7 @@ def print_costs(vaes, epoch, stage, config_params=None, test_costs=None,
             suffix = ['lr{}'.format(vae.learning_rate_value)]
             if hasattr(vae, 'temperature'):
                 suffix += ['tmp{}'.format(vae.temperature)]
-        vae_name += '-' + '-'.join(suffix)
+        vae_name = vae.name() + '-' + '-'.join(suffix)
         all_output = vae_name + ', '
         for name in data_names:
             output = '{} cost = {:.5f} '
@@ -231,9 +231,10 @@ def run_epoch(vaes, sess, input_x, data, n_samples, batch_size,
             feed_dict.update(f_dict)
         dict_of_results = sess.run(dict_of_tensors, feed_dict)
         for vae in vaes:
-            name = vae.name()
+            name = vae.name() + vae.parameters()
             costs[name].append(dict_of_results[name]['cost_for_display'])
-    return dict([(vae.name(), np.mean(costs[vae.name()])) for vae in vaes])
+    return dict([(name, np.mean(costs[name]))
+                 for name in map(lambda x: x.name()+x.parameters(), vaes)])
 
 
 def logging_experiment(epoch, stage, vaes, sess, input_x, train_costs,
