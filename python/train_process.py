@@ -74,8 +74,12 @@ def print_costs(vaes, epoch, stage, config_params=None, test_costs=None,
             'validation': val_costs[vae_name] if val_costs else None,
             'train': train_costs[vae_name] if train_costs else None
         }
-        vae_name += '-' + '-'.join('{}{}'.format(k, v)
-                                   for k, v in sorted(hyperparams.items()))
+        suffix = ['{}{}'.format(k, v) for k, v in sorted(hyperparams.items())]
+        if not suffix:
+            suffix = ['lr{}'.format(vae.learning_rate_value)]
+            if hasattr(vae, 'temperature'):
+                suffix += ['tmp{}'.format(vae.temperature)]
+        vae_name += '-' + '-'.join(suffix)
         all_output = vae_name + ', '
         for name in data_names:
             output = '{} cost = {:.5f} '
