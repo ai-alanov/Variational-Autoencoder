@@ -75,7 +75,7 @@ def print_costs(vaes, epoch, stage, config_params=None, test_costs=None,
             'train': train_costs[vae_name] if train_costs else None
         }
         vae_name += '-' + '-'.join('{}{}'.format(k, v)
-                                   for k, v in hyperparams.items())
+                                   for k, v in sorted(hyperparams.items()))
         all_output = vae_name + ', '
         for name in data_names:
             output = '{} cost = {:.5f} '
@@ -295,7 +295,6 @@ def grid_search_on_validation(sess, vaes, input_x, val_params, config_params):
     val_loss = defaultdict(lambda: defaultdict(list))
 
     keys, values = zip(*sorted(params_grid.items()))
-    print(keys)
     for v in product(*values):
         hyperparams = dict(zip(keys, v))
         for epoch in tqdm(range(0, config_params['n_epochs'],
