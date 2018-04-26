@@ -220,7 +220,6 @@ def main():
     params = vars(options)
     params = dict({'X_train': X_train, 'X_test': X_test, 'X_val': X_val},
                   **params)
-    params['logging_path'] = log_file
     params['n_stages'] = options.n_stages if options.n_stages else 1
     params['stage_to_epochs'] = (options.stage_to_epochs if options.n_stages
                                  else lambda x: options.n_epochs)

@@ -62,26 +62,27 @@ def clear_output():
         display.clear_output()
 
 
-def print_costs(vaes, epoch, stage, config_params, test_costs, val_costs=None,
-                train_costs=None, logging_path=None):
+def print_costs(vaes, epoch, stage, config_params=None, test_costs=None, val_costs=None,
+                train_costs=None, show_lr=True):
     logger = logging.getLogger('run_vae.print_costs')
     logger.info('epoch = {}, stage = {}'.format(epoch, stage))
     for vae in vaes:
-        vae_name = vae.name()
+        vae_name = vae.name() + '-' + vae.parameters()
         data_names = ['test', 'validation', 'train']
         costs = {
-            'test': test_costs[vae_name],
+            'test': test_costs[vae_name] if test_costs else None,
             'validation': val_costs[vae_name] if val_costs else None,
             'train': train_costs[vae_name] if train_costs else None
         }
-        all_output = vae_name + ': '
+        all_output = vae_name + ', '
         for name in data_names:
             output = '{} cost = {:.5f} '
             output = output.format(name, costs[name]) if costs[name] else ''
             all_output += output
-        lr_decay = config_params['lr_decay'](stage)
-        learning_rate = vae.learning_rate_value * lr_decay
-        all_output += 'learning rate = {:.5f}'.format(learning_rate)
+        if show_lr:
+            lr_decay = config_params['lr_decay'](stage)
+            learning_rate = vae.learning_rate_value * lr_decay
+            all_output += 'learning rate = {:.5f}'.format(learning_rate)
         logger.info(all_output)
 
 
@@ -235,14 +236,14 @@ def logging_experiment(epoch, stage, vaes, sess, input_x, train_costs,
     test_params = info_for_evaluation['test_params']
     val_costs = run_epoch_evaluation(vaes, sess, input_x, val_params)
     test_costs = run_epoch_evaluation(vaes, sess, input_x, test_params)
-    val_loss = info_for_evaluation['val_loss']
-    test_loss = info_for_evaluation['test_loss']
-    for vae in vaes:
-        val_loss[vae.name()].append(val_costs[vae.name()])
-        test_loss[vae.name()].append(test_costs[vae.name()])
+    # val_loss = info_for_evaluation['val_loss']
+    # test_loss = info_for_evaluation['test_loss']
+    # for vae in vaes:
+    #     val_loss[vae.name()].append(val_costs[vae.name()])
+    #     test_loss[vae.name()].append(test_costs[vae.name()])
     clear_output()
     print_costs(vaes, epoch, stage, config_params, test_costs, val_costs,
-                train_costs, config_params['logging_path'])
+                train_costs)
     # plot_loss(vaes, test_loss, val_loss, epoch,
     #           config_params['display_step'])
 
@@ -301,6 +302,7 @@ def grid_search_on_validation(sess, vaes, input_x, val_params, config_params):
                                              need_to_restore=True,
                                              save_path=save_path,
                                              epoch=epoch, **hyperparams)
+            print_costs(vaes, epoch, 0, val_costs=val_costs, show_lr=False)
             for vae in vaes:
                 val_loss[v][vae.name()].append(val_costs[vae.name()])
 
@@ -671,7 +673,6 @@ def setup_config_params(params):
         'cuda_devices': params['c_devs'],
         'mem_fraction': params['mem_frac'],
         'results_dir': params['results_dir'],
-        'logging_path': params['logging_path'],
         'params_grid': {'learning_rate': params['l_rs']},
         'n_iterations': params['n_iters'],
         'weights': params['weights'],
