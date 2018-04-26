@@ -227,7 +227,7 @@ def run_epoch(vaes, sess, input_x, data, n_samples, batch_size,
             else:
                 d_tensors, f_dict = vae.loss(n_samples=obj_samples,
                                              is_train=is_train)
-            dict_of_tensors[vae.name()] = d_tensors
+            dict_of_tensors[vae.name() + vae.parameters()] = d_tensors
             feed_dict.update(f_dict)
         dict_of_results = sess.run(dict_of_tensors, feed_dict)
         for vae in vaes:
