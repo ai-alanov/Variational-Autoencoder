@@ -676,13 +676,13 @@ def setup_config_params(params):
         'cuda_devices': params['c_devs'],
         'mem_fraction': params['mem_frac'],
         'results_dir': params['results_dir'],
-        'params_grid': {'learning_rate': params['l_rs']},
+        'params_grid': {'lr': params['l_rs']},
         'n_iterations': params['n_iters'],
         'weights': params['weights'],
         'lr_decay': params['lr_decay']
     }
     if params['tmprs']:
-        config_params['params_grid'].update({'temperature': params['tmprs']})
+        config_params['params_grid'].update({'tmp': params['tmprs']})
     return config_params
 
 
