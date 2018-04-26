@@ -295,6 +295,7 @@ def grid_search_on_validation(sess, vaes, input_x, val_params, config_params):
     val_loss = defaultdict(lambda: defaultdict(list))
 
     keys, values = zip(*sorted(params_grid.items()))
+    print(keys)
     for v in product(*values):
         hyperparams = dict(zip(keys, v))
         for epoch in tqdm(range(0, config_params['n_epochs'],
