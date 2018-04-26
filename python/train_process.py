@@ -62,8 +62,8 @@ def clear_output():
         display.clear_output()
 
 
-def print_costs(vaes, epoch, stage, config_params=None, test_costs=None, val_costs=None,
-                train_costs=None, show_lr=True):
+def print_costs(vaes, epoch, stage, config_params=None, test_costs=None,
+                val_costs=None, train_costs=None, show_lr=True, **hyperparams):
     logger = logging.getLogger('run_vae.print_costs')
     logger.info('epoch = {}, stage = {}'.format(epoch, stage))
     for vae in vaes:
@@ -74,7 +74,8 @@ def print_costs(vaes, epoch, stage, config_params=None, test_costs=None, val_cos
             'validation': val_costs[vae_name] if val_costs else None,
             'train': train_costs[vae_name] if train_costs else None
         }
-        vae_name += '-' + vae.parameters()
+        vae_name += '-' + '-'.join('{}{}'.format(k, v)
+                                   for k, v in hyperparams.items())
         all_output = vae_name + ', '
         for name in data_names:
             output = '{} cost = {:.5f} '
@@ -303,7 +304,8 @@ def grid_search_on_validation(sess, vaes, input_x, val_params, config_params):
                                              need_to_restore=True,
                                              save_path=save_path,
                                              epoch=epoch, **hyperparams)
-            print_costs(vaes, epoch, 0, val_costs=val_costs, show_lr=False)
+            print_costs(vaes, epoch, 0, val_costs=val_costs,
+                        show_lr=False, **hyperparams)
             for vae in vaes:
                 val_loss[v][vae.name()].append(val_costs[vae.name()])
 
