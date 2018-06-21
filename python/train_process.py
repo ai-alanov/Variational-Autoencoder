@@ -352,9 +352,9 @@ def test_model(vaes, vae_params_list, test_params, val_params,
     output = '{}: loss = {:.4f}, optimal iter = {}, '
     output += ', '.join(['optimal {} = {}'] * len(optimal_hyperparams)) + '\n'
     with open(results_file, 'w') as f:
-        for name in map(lambda x: x.name(), vaes):
+        for name, vae in zip(map(lambda x: x.name(), vaes), vaes):
             f.write(output.format(
-                name, test_loss[name], epochs[name],
+                name, test_loss[name + vae.parameters()], epochs[name],
                 *chain(*[(key, optimal_hyperparams[key][name])
                          for key in optimal_hyperparams.keys()])))
     sess.close()
