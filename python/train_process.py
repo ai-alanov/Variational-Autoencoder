@@ -311,6 +311,7 @@ def grid_search_on_validation(sess, vaes, input_x, val_params, config_params):
                                              epoch=epoch, **hyperparams)
             print_costs(vaes, epoch, 0, val_costs=val_costs,
                         show_lr=False, **hyperparams)
+            print(val_costs.keys())
             for vae in vaes:
                 val_loss[v][vae.name()].append(val_costs[vae.name()])
 
