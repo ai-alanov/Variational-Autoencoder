@@ -154,7 +154,11 @@ def restore_vae_weights(vaes, sess, epoch, save_dir, **hyperparams):
     for vae in vaes:
         weights_file = restore_weights_file(vae, epoch, save_dir,
                                             **hyperparams)
-        vae.restore_weights(sess, weights_file)
+        try:
+            vae.restore_weights(sess, weights_file)
+        except Exception as e:
+            print(weights_file)
+            raise e
 
 
 def load_loss(vaes, learning_rates, save_dir, results_dir, loss_name):
