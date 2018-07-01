@@ -151,13 +151,14 @@ def restore_weights_file(vae, epoch, save_dir, **hyperparams):
 
 
 def restore_vae_weights(vaes, sess, epoch, save_dir, **hyperparams):
+    logger = logging.getLogger('run_vae.restore_vae_weights')
     for vae in vaes:
         weights_file = restore_weights_file(vae, epoch, save_dir,
                                             **hyperparams)
         try:
             vae.restore_weights(sess, weights_file)
         except Exception as e:
-            print(weights_file)
+            logger.info(weights_file)
             raise e
 
 
