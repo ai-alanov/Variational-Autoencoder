@@ -204,6 +204,9 @@ def main():
             for line in buf.rstrip().splitlines():
                 self.logger.error(line.rstrip())
 
+        def flush(self):
+            self.stderr.flush()
+
     stderr_logger = logging.getLogger('STDERR')
     stderr_handler = logging.FileHandler(log_file)
     stderr_handler.setFormatter(logging.Formatter('%(name)s: %(message)s'))
