@@ -118,7 +118,8 @@ def main():
                       help="test objective samples")
     parser.add_option("--val_obj_samples", type='int', default=5,
                       help="validation objective samples")
-    parser.add_option("--c_devs", type='string', help="cuda devices")
+    parser.add_option("--c_devs", type='string', default=None,
+                      help="cuda devices")
     parser.add_option("--mem_frac", type='float', default=0.5,
                       help="memory fraction used in gpu")
     parser.add_option("--dataset", type='string', default='mnist',
