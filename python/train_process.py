@@ -138,7 +138,8 @@ def find_file(vae, save_dir, **hyperparams):
     try:
         latest_file = sorted(files)[-1]
     except IndexError as e:
-        print(save_path)
+        logger = logging.getLogger('run_vae.find_file')
+        logger.info(save_path)
         raise e
     now = os.path.basename(latest_file)
     return save_path, now
